@@ -1,0 +1,26 @@
+spring:
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      username: ${REDIS_USERNAME:default}
+      database: ${REDIS_DATABASE:0}
+      password: ${REDIS_PASSWORD:}
+      timeout: ${REDIS_TIMEOUT:10000}
+      connect-timeout: ${spring.data.redis.timeout}
+      repositories:
+        enabled: false
+      sentinel:
+        enabled: ${REDIS_SENTINEL_ENABLED:false}
+        nodes: ${REDIS_SENTINEL_NODES:}
+        master: ${REDIS_SENTINEL_MASTER:mymaster}
+        username: ${REDIS_SENTINEL_USERNAME:}
+        password: $(REDIS_SENTINEL_PASSWORD:}
+      lettuce:
+        pool:
+          max-active: ${REDIS_LETTUCE_POOL_MAX_ACTIVE:8}
+          max-wait: ${REDIS_LETTUCE_POOL_MAX_WAIT:-1}
+          max-idle: ${REDIS_LETTUCE_POOL_MAX_IDLE:8}
+          min-idle: ${REDIS_lETTUCE_POOL-MIN_IDLE:8}
+    cache:
+      type: redis

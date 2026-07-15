@@ -1,0 +1,4 @@
+com.github.dgavrikov.core.config.CoreLoggingConfiguration
+com.github.dgavrikov.core.config.TracingConfiguration
+com.github.dgavrikov.core.config.CoreMonitoringConfiguration
+com.github.dgavrikov.core.config.CoreWebClientConfiguration

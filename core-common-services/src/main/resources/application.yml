@@ -1,0 +1,32 @@
+spring:
+  main:
+    web-application-type: servlet
+  application:
+    name: ${APPLICATION_NAME:CODE.com.dgavr-default}
+logging:
+  level:
+    root: warn
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, prometheus
+    access:
+      default: none
+  endpoint:
+    prometheus:
+      access: read_only
+    health:
+      access: read_only
+      probes:
+        enabled: true
+  metrics:
+    web:
+      client:
+        max-uri-tags: 200
+      server:
+        max-uri-tags: 200
+  tracing:
+    propagation:
+      type: W3C
+      produce: W3C
