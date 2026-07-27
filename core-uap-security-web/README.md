@@ -177,16 +177,16 @@ public class RestClientsConfig {
     @Bean
     public RestClient baseHttpClient(
             RestClient.Builder restClientBuilder,
-            ClientHttpRequestFactory factory,
-            RestClientInterceptor restClientInterceptor
+            ClientHttpRequestFactory factory
     ) {
         return restClientBuilder
                 .requestFactory(factory)
-                .requestInterceptor(restClientInterceptor)
                 .messageConverters(WebConfig::logMessageReplaceConverter)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                /* not need or use core-correlation
                 .defaultHeader(Constants.X_INITIATOR_SERVICE, INITIATOR_SERVICE)
                 .defaultHeader(Constants.X_INITIATOR_HOST, applicationName)
+                 */
                 .build();
     }
 
@@ -197,20 +197,20 @@ public class RestClientsConfig {
     public RestClient baseHttpClientUAP(
             RestClient.Builder restClientBuilder,
             ClientHttpRequestFactory factory,
-            UAPTokenService uapTokenService,
-            RestClientInterceptor restClientInterceptor
+            UAPTokenService uapTokenService
     ) {
         return restClientBuilder
                 .requestFactory(factory)
-                .requestInterceptor(restClientInterceptor)
                 .requestInterceptor((request, body, execution) -> {
                     request.getHeaders().setBearerAuth(uapTokenService.getJWTByOAuth2FromUAP("default"));
                     return execution.execute(request, body);
                 })
                 .messageConverters(WebConfig::logMessageReplaceConverter)
                 .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                /* not need or use core-correlation
                 .defaultHeader(Constants.X_INITIATOR_SERVICE, INITIATOR_SERVICE)
                 .defaultHeader(Constants.X_INITIATOR_HOST, applicationName)
+                 */
                 .build();
     }
 
@@ -221,12 +221,10 @@ public class RestClientsConfig {
     public RestClient baseHttpClientUAPTech(
             RestClient.Builder restClientBuilder,
             ClientHttpRequestFactory factory,
-            UAPTokenService uapTokenService,
-            RestClientInterceptor restClientInterceptor
+            UAPTokenService uapTokenService
     ) {
         return restClientBuilder
                 .requestFactory(factory)
-                .requestInterceptor(restClientInterceptor)
                 .requestInterceptor((request, body, execution) -> {
                     request.getHeaders().setBearerAuth(uapTokenService.getJWTByOAuth2FromUAP("jwt-tech"));
                     return execution.execute(request, body);
