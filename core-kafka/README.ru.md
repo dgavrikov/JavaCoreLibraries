@@ -49,6 +49,8 @@ custom:
         listener-concurrency: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_LISTENER_CONCURRENCY:1}
         max-poll-interval-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_MAX_POLL_INTERVAL_MS:300000}
         max-poll-records: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_MAX_POLL_RECORDS:100}
+        session-timeout-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_SESSION_TIMEOUT_MS:45000}
+        heartbeat-interval-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_HEARTBEAT_INTERVAL_MS:10000}
         retry-attempts: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_RETRY_ATTEMPTS:10}
         retry-backoff-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_RETRY_BACKOFF_MS:2000}
         enable-virtual-thread: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_ENABLE_VIRTUAL_THREAD:true}
@@ -219,6 +221,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
 
     private final KafkaProperties customKafkaProperties;
     private final ObjectMapper objectMapper;
+    private final MaskingLog maskingLog;
 
     public CustomKafkaProduceClientImpl(
             KafkaTemplate<String, String> customKafkaTemplate,
@@ -241,8 +244,11 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
         try {
             // Сериализация DTO в строку на уровне приложения (KISS/SRP)
             String jsonPayload = objectMapper.writeValueAsString(request);
+            
+            // Логируем исходный объект
+            maskingLog.debug(log, request, "Message body: ");
 
-            // Компилятор строго гарантирует, что в методsendMessage передается только String
+            // Компилятор строго гарантирует, что в метод sendMessage передается только String
             this.sendMessage(getOrderEventsTopic(), messageKey, jsonPayload, headers);
         } catch (JsonProcessingException e) {
             log.error("Failed to serialize order event request to JSON", e);
@@ -253,6 +259,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
     @Override
     public void billingEventSend(BillingEventDto request, Map<String, String> headers, String messageKey) {
         try {
+            maskingLog.debug(log, request, "Message body: ");
             String jsonPayload = objectMapper.writeValueAsString(request);
             this.sendMessage(getBillingEventsTopic(), messageKey, jsonPayload, headers);
         } catch (JsonProcessingException e) {
@@ -309,6 +316,8 @@ public class BinaryReportProducerClient extends AbstractKafkaProducerClient<Stri
     public void sendPdfReport(byte[] pdfBytes, String fileId, Map<String, String> headers) {
         String targetTopic = customKafkaProperties.getProducer().getTopics().get("report-binary-events");
 
+        log.debug("Message body (bytes size): {}", bytes.length);
+        
         // Контроль на этапе компиляции: разрешен только byte[]. 
         // Попытка передать DTO или обычную строку вызовет ошибку компиляции.
         this.sendMessage(targetTopic, fileId, pdfBytes, headers);

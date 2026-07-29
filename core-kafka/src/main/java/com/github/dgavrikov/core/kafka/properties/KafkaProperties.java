@@ -22,6 +22,8 @@ public class KafkaProperties {
         private Integer listenerConcurrency;
         private Integer maxPollIntervalMs;
         private Integer maxPollRecords;
+        private Integer sessionTimeoutMs = 45000;
+        private Integer heartbeatIntervalMs = 10000;
         private long retryAttempts = 10;
         private long retryBackoffMs = 2000;
         private Boolean enableVirtualThread = false;

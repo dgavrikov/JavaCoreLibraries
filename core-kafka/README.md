@@ -49,6 +49,8 @@ custom:
         listener-concurrency: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_LISTENER_CONCURRENCY:1}
         max-poll-interval-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_MAX_POLL_INTERVAL_MS:300000}
         max-poll-records: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_MAX_POLL_RECORDS:100}
+        session-timeout-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_SESSION_TIMEOUT_MS:45000}
+        heartbeat-interval-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_HEARTBEAT_INTERVAL_MS:10000}
         retry-attempts: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_RETRY_ATTEMPTS:10}
         retry-backoff-ms: ${CUSTOM_KAFKA_CONSUMERS_PAYMENT_GROUP_RETRY_BACKOFF_MS:2000}
         # Leverages Java 21 lightweight virtual threads for maximum concurrency performance
@@ -232,6 +234,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
 
     private final KafkaProperties customKafkaProperties;
     private final ObjectMapper objectMapper;
+    private final MaskingLog maskingLog;
 
     public CustomKafkaProduceClientImpl(
             KafkaTemplate<String, String> customKafkaTemplate,
@@ -242,6 +245,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
         super(customKafkaTemplate, maskingLog, log);
         this.customKafkaProperties = customKafkaProperties;
         this.objectMapper = objectMapper;
+        this.maskingLog = maskingLog;
     }
 
     @Override
@@ -252,6 +256,9 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
     @Override
     public void orderEventSend(OrderEventDto request, Map<String, String> headers, String messageKey) {
         try {
+            // Logging source object
+            maskingLog.debug(log, request, "Message body: ");
+            
             // Application-level serialization preserves Clean Architecture & KISS
             String jsonPayload = objectMapper.writeValueAsString(request);
 
@@ -266,6 +273,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
     @Override
     public void billingEventSend(BillingEventDto request, Map<String, String> headers, String messageKey) {
         try {
+            maskingLog.debug(log, request, "Message body: ");
             String jsonPayload = objectMapper.writeValueAsString(request);
             this.sendMessage(getBillingEventsTopic(), messageKey, jsonPayload, headers);
         } catch (JsonProcessingException e) {
@@ -320,6 +328,8 @@ public class BinaryReportProducerClient extends AbstractKafkaProducerClient<Stri
 
     public void sendPdfReport(byte[] pdfBytes, String fileId, Map<String, String> headers) {
         String targetTopic = customKafkaProperties.getProducer().getTopics().get("report-binary-events");
+
+        log.debug("Message body (bytes size): {}", bytes.length);
 
         // Compile-time verification: Only byte[] is allowed. DTOs or plain Strings will cause a compilation error.
         this.sendMessage(targetTopic, fileId, pdfBytes, headers);

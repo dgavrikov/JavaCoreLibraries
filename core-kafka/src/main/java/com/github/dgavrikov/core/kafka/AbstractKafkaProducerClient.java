@@ -45,15 +45,8 @@ public abstract class AbstractKafkaProducerClient<K, V> implements KafkaProducer
     private void innerSend(String topics, K recordKey, V messageObject, Map<String, String> header, boolean isFast)
             throws ProducerKafkaException {
         try {
-            maskingLog.info(log, "Sending message to system " + getSystemName()
-                    + ", topic: " + topics + ", key: " + recordKey);
+            log.info("Sending message to system {}, topic: {}, key: {}", getSystemName(), topics, recordKey);
             maskingLog.debug(log, List.of(MaskingMarker.MASKING_JSON_MARKER, MaskingMarker.MASKING_MARKER), header, "headers:");
-
-            if (messageObject instanceof byte[] bytes) {
-                maskingLog.debug(log, "Message body (bytes size): " + bytes.length);
-            } else {
-                maskingLog.debug(log, messageObject, "Message body: ");
-            }
 
             var topicArray = topics.split(";");
             List<CompletableFuture<SendResult<K, V>>> futures = new ArrayList<>(topicArray.length);
@@ -74,7 +67,7 @@ public abstract class AbstractKafkaProducerClient<K, V> implements KafkaProducer
 
                 if (isFast) {
                     future.exceptionally(ex -> {
-                        logErrorState(ex, cleanTopic, recordKey, messageObject, header);
+                        logErrorState(ex, cleanTopic, recordKey, header);
                         return null;
                     });
                 } else {
@@ -86,9 +79,9 @@ public abstract class AbstractKafkaProducerClient<K, V> implements KafkaProducer
                 try {
                     CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
                     for (var topic : topicArray)
-                        maskingLog.trace(log, "Message successfully sent to topic " + topic + ", key: " + recordKey);
+                        log.trace("Message successfully sent to topic {}, key: {}", topic, recordKey);
                 } catch (Exception e) {
-                    logErrorState(e, topics, recordKey, messageObject, header);
+                    logErrorState(e, topics, recordKey, header);
                     throw new ProducerKafkaException("Error sending message to topics " + topics
                             + ", key: " + recordKey
                             + ", headers: " + header, e);
@@ -104,16 +97,9 @@ public abstract class AbstractKafkaProducerClient<K, V> implements KafkaProducer
     private void logErrorState(Throwable e,
                                String topic,
                                K recordKey,
-                               V messageObject,
                                Map<String, String> headers) {
-        if (messageObject instanceof byte[] bytes) {
-            maskingLog.error(log, "Payload size: " + bytes.length + " bytes");
-        } else {
-            maskingLog.error(log, messageObject, "Message body: ");
-
-        }
         maskingLog.error(log, List.of(MaskingMarker.MASKING_JSON_MARKER, MaskingMarker.MASKING_MARKER), headers, "Headers: ");
-        maskingLog.error(log, e, "Error sending message to topic " + topic + ", key: " + recordKey);
+        log.error("Error sending message to topic {}, key: {}", topic, recordKey, e);
     }
 
     protected abstract String getSystemName();
