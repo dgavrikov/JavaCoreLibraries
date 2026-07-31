@@ -18,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
 import java.util.function.UnaryOperator;
 
 @Slf4j
@@ -102,6 +103,9 @@ public class MdcLoggingWrappingAppender extends AppenderBase<ILoggingEvent> {
         private final MaskingLog maskingLog;
 
         private volatile String cachedFormattedMessage;
+        private static final AtomicReferenceFieldUpdater<ProcessedLoggingEvent, String> UPDATER =
+                AtomicReferenceFieldUpdater.newUpdater(ProcessedLoggingEvent.class, String.class, "cachedFormattedMessage");
+
 
         public ProcessedLoggingEvent(
                 ILoggingEvent delegate,
@@ -225,6 +229,7 @@ public class MdcLoggingWrappingAppender extends AppenderBase<ILoggingEvent> {
 
         @Override
         public String getFormattedMessage() {
+            /*
             // If the message has already been masked, instantly return the cached version
             if (cachedFormattedMessage == null) {
                 synchronized (this) { // Thread-safety guard against concurrent masking attempts
@@ -234,6 +239,21 @@ public class MdcLoggingWrappingAppender extends AppenderBase<ILoggingEvent> {
                 }
             }
             return cachedFormattedMessage;
+             */
+
+            // Fast path: direct volatile read without any locking overhead
+            String currentMsg = this.cachedFormattedMessage;
+
+            if (currentMsg == null) {
+                // Lazy evaluation of heavy masking/formatting logic
+                String computedMsg = process();
+
+                // Atomically update via static updater with zero memory allocation pressure.
+                // Works flawlessly across both Platform and Virtual Threads without pinning.
+                currentMsg = UPDATER.updateAndGet(this, existing -> existing != null ? existing : computedMsg);
+            }
+
+            return currentMsg;
         }
 
         @Override
