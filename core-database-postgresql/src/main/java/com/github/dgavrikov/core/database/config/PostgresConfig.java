@@ -33,7 +33,7 @@ public class PostgresConfig {
 
     @Bean
     @Primary
-    @ConfigurationProperties(prefix = "string.datasource.hikari")
+    @ConfigurationProperties(prefix = "spring.datasource.hikari")
     public HikariDataSource postgresDataSource() { return  new HikariDataSource();}
 
     @Bean
