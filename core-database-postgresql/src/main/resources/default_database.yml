@@ -5,11 +5,11 @@ spring:
       username: ${DATASOURCE_USERNAME:}
       password: ${DATASOURCE_PASSWORD:}
       driver-class-name: org.postgresql.Driver
-      maximun-pool-size: ${DATASOURCE_MAX_POOL_SIZE:4}
+      maximum-pool-size: ${DATASOURCE_MAX_POOL_SIZE:4}
       validation-timeout: ${DATASOURCE_VALIDATION_TIMEOUT_MS:2000}
       max-lifetime: ${DATASOURCE_MAX_LIFETIME_MS:1800000}
       keep-alive-time: ${DATASOURCE_KEEP_ALIVE_TIME_MS:40000}
-      minimum-idle: ${DATASOURCE_MINUMIM_IDLE:1}
+      minimum-idle: ${DATASOURCE_MINIMUM_IDLE:1}
     properties:
       repository-packages: com.gmail.dgavrikov84
       transaction-timeout: ${DATASOURCE_TRANSACTION_TIMEOUT:50}

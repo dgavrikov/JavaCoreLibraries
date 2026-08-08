@@ -88,7 +88,7 @@ public class DbFactoryImpl implements DbFactory {
 
         @Override
         public QueryBuilder<T> hqlCount(String hql, Map<String, Object> filters) {
-            this.hqlCount = hqlCount;
+            this.hqlCount = hql;
             this.filters = filters;
             return this;
         }
