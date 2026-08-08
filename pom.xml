@@ -35,11 +35,10 @@
         <maven.compiler.target>21</maven.compiler.target>
         <maven.compiler.release>21</maven.compiler.release>
 
-        <jetbrains.version>26.0.2</jetbrains.version>
-
         <maven.compiler-plugin.version>3.15.0</maven.compiler-plugin.version>
         <maven.source-plugin.version>3.4.0</maven.source-plugin.version>
         <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
+        <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
 
         <lombok.version>1.18.46</lombok.version>
         <mapstruct.version>1.6.3</mapstruct.version>
@@ -48,6 +47,7 @@
         <commons-collection4.version>4.5.0</commons-collection4.version>
         <micrometer.version>1.16.6</micrometer.version>
         <commons-beanutils.version>1.11.0</commons-beanutils.version>
+        <plexus-utils.version>4.0.2</plexus-utils.version>
         <jna.version>5.19.1</jna.version> <!-- 5.18.1 -->
         <nimbus-jose-jwt.version>10.9.1</nimbus-jose-jwt.version>
         <org.eclipse.jgit.version>7.7.0.202606012155-r</org.eclipse.jgit.version>
@@ -111,7 +111,7 @@
             <dependency>
                 <groupId>commons-beanutils</groupId>
                 <artifactId>commons-beanutils</artifactId>
-                <version>${commons-beanutils.verison}</version>
+                <version>${commons-beanutils.version}</version>
             </dependency>
             <dependency>
                 <groupId>net.java.dev.jna</groupId>
