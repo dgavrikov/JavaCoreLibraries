@@ -5,6 +5,7 @@ import com.github.dgavrikov.core.lock.LockObject;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import org.apache.commons.lang3.StringUtils;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -17,12 +18,6 @@ import java.util.Map;
 import java.util.Optional;
 
 public abstract class AbstractRedisLockManager<T extends Enum<T>> implements LockManager<T> {
-    private final static String COUNTER_READS_SUCCESS_TOTAL = "redis_reads_success_total";
-    private final static String COUNTER_READS_FAILURE_TOTAL = "redis_reads_failure_total";
-    private final static String COUNTER_WRITES_SUCCESS_TOTAL = "redis_writes_success_total";
-    private final static String COUNTER_WRITES_FAILURE_TOTAL = "redis_writes_failure_total";
-    private final static String COUNTER_DELETE_SUCCESS_TOTAL = "redis_delete_success_total";
-    private final static String COUNTER_DELETE_FAILURE_TOTAL = "redis_delete_failure_total";
     private final static long SLEEP_MS = 1000L;
     private final static long DEFAULT_TIME_TO_LIVE = 60L;
 
@@ -50,57 +45,34 @@ public abstract class AbstractRedisLockManager<T extends Enum<T>> implements Loc
     private void registerCounters() {
         if (this.meterRegistry == null)
             return;
-        Counter.builder(COUNTER_READS_SUCCESS_TOTAL)
-                .tag("type", "get")
-                .description("Redis total success read " + COUNTER_READS_SUCCESS_TOTAL)
-                .register(meterRegistry);
 
-        Counter.builder(COUNTER_READS_FAILURE_TOTAL)
-                .tag("type", "get")
-                .description("Redis total error read " + COUNTER_READS_FAILURE_TOTAL)
-                .register(meterRegistry);
-
-        Counter.builder(COUNTER_WRITES_SUCCESS_TOTAL)
-                .tag("type", "put")
-                .description("Redis total success write " + COUNTER_WRITES_SUCCESS_TOTAL)
-                .register(meterRegistry);
-
-        Counter.builder(COUNTER_WRITES_FAILURE_TOTAL)
-                .tag("type", "put")
-                .description("Redis total error write " + COUNTER_WRITES_FAILURE_TOTAL)
-                .register(meterRegistry);
-
-        Counter.builder(COUNTER_DELETE_SUCCESS_TOTAL)
-                .tag("type", "delete")
-                .description("Redis total success delete " + COUNTER_DELETE_SUCCESS_TOTAL)
-                .register(meterRegistry);
-
-        Counter.builder(COUNTER_DELETE_FAILURE_TOTAL)
-                .tag("type", "delete")
-                .description("Redis total error delete " + COUNTER_DELETE_FAILURE_TOTAL)
-                .register(meterRegistry);
+        for (var counter : RedisMeterCounters.values())
+            Counter.builder(counter.counterName)
+                    .tag("type", counter.tagValue)
+                    .description(counter.description)
+                    .register(meterRegistry);
     }
 
     @Override
     public LockObject<T> keyLock(T lockType, String key) {
         var resultStatus = LockObject.Status.RELEASED;
 
-        if(!StringUtils.isEmpty(key)) {
-            try{
+        if (!StringUtils.isEmpty(key)) {
+            try {
                 boolean locked = false;
                 while (!locked) {
                     locked = lock(lockType, key);
-                    if(!locked) {
+                    if (!locked) {
                         log.debug("Waiting for the lock to be released for key = {}", generateKey(lockType, key));
-                        incrementMeterCounter(COUNTER_READS_SUCCESS_TOTAL);
+                        incrementMeterCounter(RedisMeterCounters.COUNTER_READS_SUCCESS_TOTAL);
                         Thread.sleep(SLEEP_MS);
                     }
                 }
                 resultStatus = LockObject.Status.RECEIVED;
-                incrementMeterCounter(COUNTER_WRITES_SUCCESS_TOTAL);
+                incrementMeterCounter(RedisMeterCounters.COUNTER_WRITES_SUCCESS_TOTAL);
             } catch (Exception e) {
                 Thread.currentThread().interrupt();
-                incrementMeterCounter(COUNTER_WRITES_FAILURE_TOTAL);
+                incrementMeterCounter(RedisMeterCounters.COUNTER_WRITES_FAILURE_TOTAL);
                 log.warn("enterLock exception:", e);
             }
         }
@@ -110,18 +82,18 @@ public abstract class AbstractRedisLockManager<T extends Enum<T>> implements Loc
     @Override
     public LockObject<T> keyLockImmediately(T lockType, String key) {
         var resultStatus = LockObject.Status.RELEASED;
-        if(!StringUtils.isEmpty(key)) {
-            try{
+        if (!StringUtils.isEmpty(key)) {
+            try {
                 var locked = lock(lockType, key);
-                if(locked) {
+                if (locked) {
                     resultStatus = LockObject.Status.RECEIVED;
-                    incrementMeterCounter(COUNTER_WRITES_SUCCESS_TOTAL);
+                    incrementMeterCounter(RedisMeterCounters.COUNTER_WRITES_SUCCESS_TOTAL);
                 } else {
                     resultStatus = LockObject.Status.EXISTS;
-                    incrementMeterCounter(COUNTER_READS_SUCCESS_TOTAL);
+                    incrementMeterCounter(RedisMeterCounters.COUNTER_READS_SUCCESS_TOTAL);
                 }
             } catch (Exception e) {
-                incrementMeterCounter(COUNTER_READS_FAILURE_TOTAL);
+                incrementMeterCounter(RedisMeterCounters.COUNTER_READS_FAILURE_TOTAL);
                 log.warn("tryLock exception:", e);
             }
         }
@@ -134,19 +106,18 @@ public abstract class AbstractRedisLockManager<T extends Enum<T>> implements Loc
             return;
         try {
             redisTemplate.delete(generateKey(object.getType(), object.getKey()));
-            incrementMeterCounter(COUNTER_DELETE_SUCCESS_TOTAL);
+            incrementMeterCounter(RedisMeterCounters.COUNTER_DELETE_SUCCESS_TOTAL);
         } catch (Exception e) {
-            incrementMeterCounter(COUNTER_DELETE_FAILURE_TOTAL);
+            incrementMeterCounter(RedisMeterCounters.COUNTER_DELETE_FAILURE_TOTAL);
             log.warn("Release Lock exception: ", e);
         }
     }
 
-    private void incrementMeterCounter(@NotNull String counterName){
-        if(this.meterRegistry == null)
+    private void incrementMeterCounter(@NotNull RedisMeterCounters counter) {
+        if (this.meterRegistry == null)
             return;
-        meterRegistry.get(counterName)
-                .counter()
-                .increment();
+
+        meterRegistry.counter(counter.counterName, "tag", counter.tagValue).increment();
     }
 
     private Boolean lock(T lockType, String key) {
@@ -158,4 +129,36 @@ public abstract class AbstractRedisLockManager<T extends Enum<T>> implements Loc
     }
 
     protected abstract @NotNull String generateKey(@Nullable T lockType, @NotNull String key);
+
+    @RequiredArgsConstructor
+    private enum RedisMeterCounters {
+        COUNTER_READS_SUCCESS_TOTAL(
+                "redis_reads_success_total",
+                "get",
+                "Redis total success read redis_reads_success_total"),
+        COUNTER_READS_FAILURE_TOTAL(
+                "redis_reads_failure_total",
+                "get",
+                "Redis total error read redis_reads_failure_total"),
+        COUNTER_WRITES_SUCCESS_TOTAL(
+                "redis_writes_success_total",
+                "put",
+                "Redis total success write redis_writes_success_total"),
+        COUNTER_WRITES_FAILURE_TOTAL(
+                "redis_writes_failure_total",
+                "put",
+                "Redis total error write redis_writes_failure_total"),
+        COUNTER_DELETE_SUCCESS_TOTAL(
+                "redis_delete_success_total",
+                "delete",
+                "Redis total success delete redis_delete_success_total"),
+        COUNTER_DELETE_FAILURE_TOTAL(
+                "redis_delete_failure_total",
+                "delete",
+                "Redis total error delete redis_delete_failure_total");
+
+        private final String counterName;
+        private final String tagValue;
+        private final String description;
+    }
 }
