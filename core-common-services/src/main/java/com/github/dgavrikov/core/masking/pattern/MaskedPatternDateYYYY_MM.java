@@ -14,16 +14,20 @@ public class MaskedPatternDateYYYY_MM implements MaskedPattern {
     private static final Pattern pattern = Pattern.compile("(.{4})(.+)",
             Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
-    private static final String REPLACEMENT_TAIL = Constants.DEFAULT_REPLACEMENT_CHAR
-            + Constants.DEFAULT_REPLACEMENT_CHAR
-            + Constants.DEFAULT_REPLACEMENT_CHAR
-            + Constants.DEFAULT_REPLACEMENT_CHAR
-            + "$2";
+    private static final int HEAD_LENGTH = 4;
+
+    private static final String MASK_HEAD = String.valueOf(Constants.DEFAULT_REPLACEMENT_CHAR).repeat(HEAD_LENGTH);
 
     public static UnaryOperator<String> masking = value -> {
         if (MaskedPattern.shouldSkipMasking(value)) return value;
 
-        return pattern.matcher(value).replaceAll(REPLACEMENT_TAIL);
+        int length = value.length();
+
+        if (length <= HEAD_LENGTH) {
+            return MASK_HEAD;
+        }
+
+        return MASK_HEAD + value.substring(HEAD_LENGTH);
     };
 
     @Override
