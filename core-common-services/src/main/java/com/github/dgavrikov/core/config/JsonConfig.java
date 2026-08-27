@@ -3,7 +3,7 @@ package com.github.dgavrikov.core.config;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.github.dgavrikov.core.encoding.OffsetDateTimeDeserializer;
 import com.github.dgavrikov.core.encoding.OffsetDateTimeSerializer;
-import com.github.dgavrikov.core.service.JsonBuilder;
+import com.github.dgavrikov.core.utils.JsonBuilder;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;

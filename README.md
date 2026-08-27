@@ -39,6 +39,7 @@ Provides foundational functionality for logging, metrics monitoring, distributed
 * Optimized collection manipulation utilities.
 * Serialization and deserialization utilities with built-in compression.
 * Performance-optimized string manipulation utilities.
+* Virtual-thread-ready task scheduler configurator.
 
 ### Quick Start
 
@@ -81,6 +82,91 @@ Provides foundational functionality for logging, metrics monitoring, distributed
        </root>
    </configuration>
    ```
+
+### Virtual-Thread-Ready Task Scheduler Configurator
+
+Below is an example of how to implement and use the configurator.
+
+**Configuration**
+
+```java
+package com.github.dgavrikov.examples.config;
+
+import com.github.dgavrikov.core.config.SchedulerConfigurationBuilder;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.core.env.Environment;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.annotation.EnableAsync;
+import org.springframework.scheduling.annotation.EnableScheduling;
+
+@EnableAsync
+@Configuration
+@EnableScheduling
+@Slf4j
+@RequiredArgsConstructor
+public class SchedulerConfig {
+    private final Environment env;
+
+    @Bean
+    public TaskScheduler metricScheduler() {
+        boolean isVirtual = env.getProperty("spring.threads.virtual.enabled", Boolean.class, false);
+
+        return new SchedulerConfigurationBuilder("metric-scheduler-")
+                .virtual(isVirtual)
+                .poolSize(3)
+                .build();
+    }
+
+    @Bean
+    public TaskScheduler backgroundWorker() {
+        boolean isVirtual = env.getProperty("spring.threads.virtual.enabled", Boolean.class, false);
+
+        return new SchedulerConfigurationBuilder("background-worker-")
+                .virtual(isVirtual)
+                .poolSize(50) // Easily scale the pool size for heavy workloads
+                .build();
+    }
+}
+```
+
+**Scheduler Implementation**
+```java
+package com.github.dgavrikov.examples.scheduler;
+
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.scheduling.TaskScheduler;
+import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.stereotype.Service;
+
+@Service
+@Slf4j
+@RequiredArgsConstructor
+public class MetricScheduler {
+
+   @Qualifier("metricScheduler")
+   private final TaskScheduler metricScheduler;
+
+   // @Value("${...}")
+   private String cron = "*/15 * * * * *";
+
+   @PostConstruct
+   void init(){
+      var cronTrigger = new CronTrigger(cron);
+      metricScheduler.schedule(this::process, cronTrigger);
+   }
+
+   public void process() {
+      // Task execution logic goes here
+   }
+}
+```
 
 ---
 
