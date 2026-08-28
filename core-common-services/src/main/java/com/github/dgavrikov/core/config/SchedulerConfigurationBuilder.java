@@ -1,6 +1,7 @@
 package com.github.dgavrikov.core.config;
 
 import io.opentelemetry.context.Context;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.core.task.TaskDecorator;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.SimpleAsyncTaskScheduler;
@@ -11,6 +12,7 @@ import java.util.concurrent.ThreadPoolExecutor;
 
 import static org.reflections.Reflections.log;
 
+@Slf4j
 public class SchedulerConfigurationBuilder {
     private final String prefix;
     private boolean isVirtual = false;
