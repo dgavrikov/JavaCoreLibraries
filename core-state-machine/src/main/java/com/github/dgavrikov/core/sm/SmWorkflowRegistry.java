@@ -4,13 +4,13 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record SmWorkflowRegistry<S extends Enum<S>>(
+public record SmWorkflowRegistry<ID, S extends Enum<S>, T extends ContextData<ID, S>>(
         String workflowName,
-        Map<S, StepDefinition<S>> steps
+        Map<S, StepDefinition<ID, S, T>> steps
 ) {
     public boolean supports (S state) { return steps.containsKey(state); }
 
-    public StepDefinition<S> getStep(S state) { return steps.get(state); }
+    public StepDefinition<ID, S, T> getStep(S state) { return steps.get(state); }
 
     public Set<S> getSupportStates() {return steps.keySet(); }
 

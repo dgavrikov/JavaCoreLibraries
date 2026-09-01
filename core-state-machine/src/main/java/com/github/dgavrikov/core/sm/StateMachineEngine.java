@@ -43,7 +43,7 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
     @SuppressWarnings("unchecked")
     public <T extends ContextData<ID, S>> boolean execute(
             T contextData,
-            SmWorkflowRegistry<S> registry,
+            SmWorkflowRegistry<ID, S, T> registry,
             SmStorageAdapter<ID, S> storageAdapter
     ) {
         var span = spanMicrometer.getObservation(
@@ -53,7 +53,7 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
         var scope = span.openScope();
         boolean hasError = false;
         try {
-            var runtimeCtx = new SmRuntimeContext(contextData);
+            var runtimeCtx = new SmRuntimeContext<>(contextData);
             boolean runToCompletion = true;
 
             while (runToCompletion && contextData.getState() != null) {
@@ -125,11 +125,12 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
         } catch (RuntimeException e) {
             hasError = true;
             log.error("Critical engine failure of the State Machine for ID#{}", contextData.getId());
-            storageAdapter.changeState(
+            var changeSet = storageAdapter.changeState(
                     contextData.getId(),
                     contextData.getState(),
                     "Engine Crash: " + e.getLocalizedMessage(),
                     false);
+            contextData.applyChanges(changeSet);
             incrementMeterCounter(SmMeterCounters.ENGINE_CRASH);
         } finally {
             scope.close();

@@ -8,14 +8,14 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Getter
-public final class SmRuntimeContext {
-    private final ContextData<?, ?> data;
+public final class SmRuntimeContext<ID, S extends Enum<S>, T extends ContextData<ID, S>> {
+    private final T data;
     private ExecutionSignal signal;
     private OffsetDateTime deferUntil;
     private String failReason;
     private Map<String, Object> metadata;
 
-    public SmRuntimeContext(ContextData<?, ?> data) {
+    public SmRuntimeContext(T data) {
         this.data = data;
     }
 
@@ -64,9 +64,9 @@ public final class SmRuntimeContext {
     }
 
     @SuppressWarnings("unchecked")
-    public static <T> T getMetadata(@Nullable Map<String, Object> metadata,  String key, Class<T> clazz) {
+    public static <M> M getMetadata(@Nullable Map<String, Object> metadata,  String key, Class<M> clazz) {
         if (metadata == null)
             return null;
-        return (T) metadata.get(key);
+        return (M) metadata.get(key);
     }
 }
