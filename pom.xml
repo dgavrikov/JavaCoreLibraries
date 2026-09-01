@@ -24,10 +24,11 @@
         <module>core-logbook-logging</module>
         <module>core-redis</module>
         <module>core-uap-security-web</module>
+        <module>core-state-machine</module>
     </modules>
 
     <properties>
-        <revision>3.5.2</revision>
+        <revision>3.5.3</revision>
         <encoding>UTF-8</encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -94,6 +95,11 @@
             <dependency>
                 <groupId>com.github.dgavrikov.core</groupId>
                 <artifactId>core-redis</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.github.dgavrikov.core</groupId>
+                <artifactId>core-state-machine</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
