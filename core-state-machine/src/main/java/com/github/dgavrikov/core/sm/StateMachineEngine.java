@@ -21,7 +21,7 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
             ExecutionSignal.SUCCESS, ExecutionSignal.SKIP
     );
 
-    private final SmNotifyService<ID, S>notifyService;
+    private final SmNotifyService<ID, S, ? extends ContextData<ID, S>> notifyService;
     private final SpanMicrometer spanMicrometer;
     private final MeterRegistry meterRegistry;
 
@@ -40,8 +40,9 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
         }
     }
 
-    public boolean execute(
-            ContextData<ID, S> contextData,
+    @SuppressWarnings("unchecked")
+    public <T extends ContextData<ID, S>> boolean execute(
+            T contextData,
             SmWorkflowRegistry<S> registry,
             SmStorageAdapter<ID, S> storageAdapter
     ) {
@@ -69,7 +70,7 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
                         contextData.getId(), currentState, handlerName);
 
                 if (step.notifyBefore())
-                    notifyService.notifyBefore(contextData, registry.workflowName(), handlerName);
+                    ((SmNotifyService<ID, S, T>) notifyService).notifyBefore(contextData, registry.workflowName(), handlerName);
 
                 step.eventHandler().handle(runtimeCtx);
 
@@ -114,7 +115,7 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
                 }
 
                 if (step.notifyAfter())
-                    notifyService.notifyAfter(contextData, registry.workflowName() ,handlerName, signal, runtimeCtx.getMetadata());
+                    ((SmNotifyService<ID, S, T>) notifyService).notifyAfter(contextData, registry.workflowName() ,handlerName, signal, runtimeCtx.getMetadata());
 
                 if (CONTINUOUS_SIGNALS.contains(signal))
                     runtimeCtx.resetSignal();
