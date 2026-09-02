@@ -44,7 +44,7 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
     public <T extends ContextData<ID, S>> boolean execute(
             T contextData,
             SmWorkflowRegistry<ID, S, T> registry,
-            SmStorageAdapter<ID, S> storageAdapter
+            SmStorageAdapter<ID, S, T> storageAdapter
     ) {
         var span = spanMicrometer.getObservation(
                 contextData.getTraceInfo(),
@@ -52,13 +52,15 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
                 Kind.SERVER).start();
         var scope = span.openScope();
         boolean hasError = false;
+        StepDefinition<ID, S, T> step = null;
+
         try {
             var runtimeCtx = new SmRuntimeContext<>(contextData);
             boolean runToCompletion = true;
 
             while (runToCompletion && contextData.getState() != null) {
                 var currentState = contextData.getState();
-                var step = registry.getStep(currentState);
+                step = registry.getStep(currentState);
                 if (step == null) {
                     log.warn("There is no step handler for status {}. Terminating execution.", currentState.name());
                     break;
@@ -86,26 +88,21 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
                             throw new SmStateTransmissionNotSupportException(
                                     "No transition found for signal " + signal + " at step " + currentState);
 
-                        var changeSet = storageAdapter.changeState(contextData.getId(), nextState, null, true);
-                        contextData.applyChanges(changeSet);
+                        storageAdapter.changeState(contextData, nextState, null, true);
                     }
                     case SEND -> {
                         var nextStatus = step.getTransmission(ExecutionSignal.SEND);
-                        var changeSet = storageAdapter.changeState(contextData.getId(), nextStatus, null, false);
-                        contextData.applyChanges(changeSet);
+                        storageAdapter.changeState(contextData, nextStatus, null, false);
                     }
                     case DEFER -> {
-                        var changeSet = storageAdapter.changeDeferTime(contextData.getId(), runtimeCtx.getDeferUntil());
-                        contextData.applyChanges(changeSet);
+                        storageAdapter.changeDeferTime(contextData, runtimeCtx.getDeferUntil());
                     }
                     case RETRY -> {
-                        var changeSet = storageAdapter.incrementRetryCount(contextData.getId());
-                        contextData.applyChanges(changeSet);
+                        storageAdapter.incrementRetryCount(contextData);
                     }
                     case FAIL -> {
                         var failStatus = step.getTransmission(ExecutionSignal.FAIL);
-                        var changeSet = storageAdapter.changeState(contextData.getId(), failStatus, runtimeCtx.getFailReason(), false);
-                        contextData.applyChanges(changeSet);
+                        storageAdapter.changeState(contextData, failStatus, runtimeCtx.getFailReason(), false);
                         hasError = true;
                         incrementMeterCounter(SmMeterCounters.SIGNAL_FAIL);
                     }
@@ -125,12 +122,14 @@ public class StateMachineEngine<ID, S extends Enum<S>> {
         } catch (RuntimeException e) {
             hasError = true;
             log.error("Critical engine failure of the State Machine for ID#{}", contextData.getId());
-            var changeSet = storageAdapter.changeState(
-                    contextData.getId(),
-                    contextData.getState(),
+            S errorState = (step != null && step.getTransmission(ExecutionSignal.FAIL) != null)
+                    ? step.getTransmission(ExecutionSignal.FAIL)
+                    : contextData.getState();
+
+            storageAdapter.changeState(contextData,
+                    errorState,
                     "Engine Crash: " + e.getLocalizedMessage(),
                     false);
-            contextData.applyChanges(changeSet);
             incrementMeterCounter(SmMeterCounters.ENGINE_CRASH);
         } finally {
             scope.close();

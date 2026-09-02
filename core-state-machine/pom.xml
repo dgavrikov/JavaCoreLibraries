@@ -20,6 +20,7 @@
         <dependency>
             <groupId>com.github.dgavrikov.core</groupId>
             <artifactId>core-common-services</artifactId>
+            <optional>true</optional>
         </dependency>
     </dependencies>
 
