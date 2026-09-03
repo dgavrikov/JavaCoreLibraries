@@ -11,6 +11,7 @@
 6. [core-redis](#6-core-redis) – библиотека для взаимодействия с Redis и Redis Sentinel.
 7. [core-uap-security-web](#7-core-uap-security-web) – библиотека для интеграции с сервисом аутентификации и безопасности.
 8. [core-xml](#8-core-xml) – библиотека для обработки XML и сериализации данных.
+9. [core-state-machine](#9-core-state-machine) – библиотека легковесной декларативной машины состояний, оптимизированная под High Load.
 
 ## Сборка и установка
 
@@ -346,3 +347,20 @@ public class MetricScheduler {
            xml:
              properties: com.github.dgavrikov
    ```
+
+## 9. core-state-machine
+
+Предоставляет надежную, высокопроизводительную и полностью Stateless-архитектуру конечного автомата на базе Java Records со встроенным сквозным Run-To-Completion (RTC) выполнением без оверхеда и аллокаций памяти в High Load.
+
+### Как подключить
+
+1. Добавьте зависимость в ваш `pom.xml`:
+   ```xml
+   <dependency>
+       <groupId>com.github.dgavrikov.core</groupId>
+       <artifactId>core-state-machine</artifactId>
+   </dependency>
+   ```
+2. Настройте конфигурацию параметров: [Ссылка на руководство по YAML](./core-state-machine/README.ru.md#конфигурация-yaml)
+3. Создайте классы конфигурации: [Ссылка на руководство по Java Config](./core-state-machine/README.ru.md#конфигурация-классов-java)
+4. Пример реализации доменной модели и хэндлеров: [Ссылка на примеры](./core-state-machine/README.ru.md#пример-реализации-доменной-модели)

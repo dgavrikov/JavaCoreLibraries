@@ -11,6 +11,7 @@ A monorepo containing a set of reusable corporate starter libraries and core uti
 6. [core-redis](#6-core-redis) – Redis and Redis Sentinel interaction module.
 7. [core-uap-security-web](#7-core-uap-security-web) – Authentication and security service integration.
 8. [core-xml](#8-core-xml) – XML processing and data serialization utilities.
+9. [core-state-machine](#9-core-state-machine) – Lightweight declarative finite state machine library optimized for High Load conditions.
 
 ## Build and Installation
 
@@ -345,3 +346,20 @@ Provides utilities for advanced XML processing, parsing, and data serialization.
            xml:
              properties: com.github.dgavrikov
    ```
+
+## 9. core-state-machine
+
+Provides a robust, high-performance, and fully stateless finite state machine architecture leveraging Java Records with native run-to-completion (RTC) cycle execution and zero runtime allocation overhead under extreme High Load.
+
+### Quick Start
+
+1. Add the dependency to your `pom.xml`:
+   ```xml
+   <dependency>
+       <groupId>com.github.dgavrikov.core</groupId>
+       <artifactId>core-state-machine</artifactId>
+   </dependency>
+   ```
+2. Configure application properties: [YAML Configuration Guide](./core-state-machine/README.md#yaml-configuration-reference)
+3. Set up custom configuration classes: [Java Config Guide](./core-state-machine/README.md#java-configuration)
+4. Implement a domain model and handlers: [Implementation Examples](./core-state-machine/README.md#domain-model-implementation-example)
