@@ -16,7 +16,7 @@ import java.util.Set;
 
 @RequiredArgsConstructor
 @Slf4j
-public class StateMachineEngine<ID, S extends Enum<S>> {
+public class StateMachineEngine<ID, S extends State> {
     private final static Set<ExecutionSignal> CONTINUOUS_SIGNALS = Set.of(
             ExecutionSignal.SUCCESS, ExecutionSignal.SKIP
     );

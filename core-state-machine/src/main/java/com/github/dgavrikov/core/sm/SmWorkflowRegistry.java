@@ -4,7 +4,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public record SmWorkflowRegistry<ID, S extends Enum<S>, T extends ContextData<ID, S>>(
+public record SmWorkflowRegistry<ID, S extends State, T extends ContextData<ID, S>>(
         String workflowName,
         Map<S, StepDefinition<ID, S, T>> steps
 ) {

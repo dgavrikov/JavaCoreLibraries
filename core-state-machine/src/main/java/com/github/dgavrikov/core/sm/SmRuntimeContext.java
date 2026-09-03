@@ -8,7 +8,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 @Getter
-public final class SmRuntimeContext<ID, S extends Enum<S>, T extends ContextData<ID, S>> {
+public final class SmRuntimeContext<ID, S extends State, T extends ContextData<ID, S>> {
     private final T data;
     private ExecutionSignal signal;
     private OffsetDateTime deferUntil;
@@ -41,6 +41,10 @@ public final class SmRuntimeContext<ID, S extends Enum<S>, T extends ContextData
         this.signal = ExecutionSignal.RETRY;
     }
 
+    public void stop() {
+        this.signal = ExecutionSignal.STOP;
+    }
+
     public void defer(OffsetDateTime until) {
         this.signal = ExecutionSignal.DEFER;
         this.deferUntil = until;
@@ -64,7 +68,7 @@ public final class SmRuntimeContext<ID, S extends Enum<S>, T extends ContextData
     }
 
     @SuppressWarnings("unchecked")
-    public static <M> M getMetadata(@Nullable Map<String, Object> metadata,  String key, Class<M> clazz) {
+    public static <M> M getMetadata(@Nullable Map<String, Object> metadata, String key, Class<M> clazz) {
         if (metadata == null)
             return null;
         return (M) metadata.get(key);

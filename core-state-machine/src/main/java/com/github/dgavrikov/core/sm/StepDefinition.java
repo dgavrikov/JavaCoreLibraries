@@ -2,7 +2,7 @@ package com.github.dgavrikov.core.sm;
 
 import java.util.Map;
 
-public record StepDefinition<ID, S extends Enum<S>, T extends ContextData<ID, S>> (
+public record StepDefinition<ID, S extends State, T extends ContextData<ID, S>> (
         S currentState,
         EventHandler<SmRuntimeContext<ID, S, T>> eventHandler,
         Map<ExecutionSignal, S> transmissions,
