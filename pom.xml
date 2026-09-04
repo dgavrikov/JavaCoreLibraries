@@ -11,7 +11,7 @@
         <relativePath/>
     </parent>
 
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-parent</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
@@ -68,47 +68,47 @@
     <dependencyManagement>
         <dependencies>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-common-services</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-correlation</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-database-postgresql</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-kafka</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-logbook-logging</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-redis</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-state-machine</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-uap-security-web</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
-                <groupId>com.github.dgavrikov.core</groupId>
+                <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-xml</artifactId>
                 <version>${revision}</version>
             </dependency>

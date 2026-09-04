@@ -8,7 +8,7 @@ Provides pre-configured OAuth2 client registration templates, JWT technical toke
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-uap-security-web</artifactId>
 </dependency>
 ```
@@ -93,10 +93,10 @@ The module provides pre-configured, production-ready `RestClient` beans optimize
 * `customExternalRestClient`: A mutated instance of the UAP client preset with a target base URL and destination routing headers.
 
 ```java
-import com.github.dgavrikov.core.http.OverrideDefaultHttpRequestRetryStrategy;
-import com.github.dgavrikov.core.service.logging.filter.web.WebConfig;
-import com.github.dgavrikov.core.uap.config.OAuth2WebClientConfig;
-import com.github.dgavrikov.core.utils.Constants;
+import http.io.github.dgavrikov.core.OverrideDefaultHttpRequestRetryStrategy;
+import web.filter.logging.service.io.github.dgavrikov.core.WebConfig;
+import config.uap.io.github.dgavrikov.core.OAuth2WebClientConfig;
+import utils.io.github.dgavrikov.core.Constants;
 import lombok.RequiredArgsConstructor;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -245,7 +245,7 @@ public class RestClientsConfig {
                 .uriBuilderFactory(factory)
                 .baseUrl(webClientProperties.getCustom().getBaseUrl())
                 // Target system code mapping routing requirements
-                .defaultHeader(Constants.SERVICE_TO, "TARGET_SYSTEM_CODE") 
+                .defaultHeader(Constants.SERVICE_TO, "TARGET_SYSTEM_CODE")
                 .build();
     }
 }
@@ -260,9 +260,9 @@ The library supports two approaches for executing HTTP retries on transient netw
 > ⚠️ **Deprecated:** This method is kept strictly for backward compatibility with legacy modules. Avoid using it in new features.
 
 ```java
-import com.github.dgavrikov.core.http.RetryBuilder;
-import com.github.dgavrikov.core.http.WebResponseWrapper;
-import com.github.dgavrikov.core.utils.Constants;
+import http.io.github.dgavrikov.core.RetryBuilder;
+import http.io.github.dgavrikov.core.WebResponseWrapper;
+import utils.io.github.dgavrikov.core.Constants;
 import org.springframework.web.client.RestClient;
 
 public class CustomRestClientImpl {
@@ -293,9 +293,9 @@ public class CustomRestClientImpl {
 This is the standard approach for Spring Boot 3.5. Retries are managed transparently under the hood by Apache HttpClient 5 inside the configured `ClientHttpRequestFactory`. The client code remains clean and focused only on business logic.
 
 ```java
-import com.github.dgavrikov.core.http.WebResponseHandler;
-import com.github.dgavrikov.core.http.WebResponseWrapper;
-import com.github.dgavrikov.core.utils.Constants;
+import http.io.github.dgavrikov.core.WebResponseHandler;
+import http.io.github.dgavrikov.core.WebResponseWrapper;
+import utils.io.github.dgavrikov.core.Constants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClient;

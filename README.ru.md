@@ -23,7 +23,7 @@
 3. Подключите проект в ваше приложение в качестве **parent** зависимости:
    ```xml
    <parent>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-parent</artifactId>
        <version>3.5.0</version>
    </parent> 
@@ -47,7 +47,7 @@
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-common-services</artifactId>
    </dependency>
    ```
@@ -57,8 +57,8 @@
    @Configuration
    @ComponentScan(
      basePackages = {
-             "com.github.dgavrikov.core.service", // Сервисы логирования, мониторинга и трассировки
-             "com.github.dgavrikov.core.config"   // Базовые конфигурации JSON и маппинга
+             "io.github.dgavrikov.core.service", // Сервисы логирования, мониторинга и трассировки
+             "io.github.dgavrikov.core.config"   // Базовые конфигурации JSON и маппинга
      })
    public class ImportConfig {
    }
@@ -93,7 +93,7 @@
 ```java
 package com.github.dgavrikov.examples.config;
 
-import com.github.dgavrikov.core.config.SchedulerConfigurationBuilder;
+import config.io.github.dgavrikov.core.SchedulerConfigurationBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -181,7 +181,7 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-correlation</artifactId>
    </dependency>
    ```
@@ -197,14 +197,14 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-database-postgresql</artifactId>
    </dependency>
    ```
 
 2. Импортируйте `PostgresConfig` в ваш конфигурационный класс:
    ```java
-   import com.github.dgavrikov.core.config.database.PostgresConfig;
+   import io.github.dgavrikov.core.config.database.PostgresConfig;
    import org.springframework.context.annotation.Configuration;
    import org.springframework.context.annotation.Import;
 
@@ -222,7 +222,7 @@ public class MetricScheduler {
    spring:
      datasource:
        properties:
-         repository-packages: com.github.dgavrikov
+         repository-packages: io.github.dgavrikov
      liquibase:
        change-log: classpath:/db/changelog/db.master.yml
    ```
@@ -240,7 +240,7 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-kafka</artifactId>
    </dependency>
    ```
@@ -260,7 +260,7 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-logbook-logging</artifactId>
    </dependency>
    ```
@@ -276,7 +276,7 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-redis</artifactId>
    </dependency>
    ```
@@ -300,7 +300,7 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-uap-security-web</artifactId>
    </dependency>
    ```
@@ -318,21 +318,21 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-xml</artifactId>
    </dependency>
    ```
 
 2. Настройте автоконфигурацию в вашем конфигурационном классе:
    ```java
-   import com.github.dgavrikov.core.xml.AutoConfigurationXml;
+   import xml.io.github.dgavrikov.core.AutoConfigurationXml;
    import org.springframework.context.annotation.ComponentScan;
    import org.springframework.context.annotation.Configuration;
 
    @Configuration
    @ComponentScan(basePackages = {
-           "com.github.dgavrikov.core.xml.config",
-           "com.github.dgavrikov.core.xml.service"
+           "io.github.dgavrikov.core.xml.config",
+           "io.github.dgavrikov.core.xml.service"
    }, basePackageClasses = {AutoConfigurationXml.class})
    public class ImportConfig {
    }
@@ -340,12 +340,12 @@ public class MetricScheduler {
 
 3. Переопределите параметры базового пакета в `application.yml`:
    ```yaml
-   com:
+   io:
      github:
        dgavrikov:
          core:
            xml:
-             properties: com.github.dgavrikov
+             properties: io.github.dgavrikov
    ```
 
 ## 9. core-state-machine
@@ -357,7 +357,7 @@ public class MetricScheduler {
 1. Добавьте зависимость в ваш `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-state-machine</artifactId>
    </dependency>
    ```

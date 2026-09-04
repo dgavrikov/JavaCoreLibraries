@@ -8,7 +8,7 @@ Provides pre-configured integration with standalone Redis instances and high-ava
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-redis</artifactId>
 </dependency>
 ```
@@ -20,7 +20,7 @@ Provides pre-configured integration with standalone Redis instances and high-ava
 Activate the built-in Redis infrastructure components by including `AutoConfigurationRedis` within your configuration class component scan:
 
 ```java
-import com.github.dgavrikov.core.redis.AutoConfigurationRedis;
+import redis.io.github.dgavrikov.core.AutoConfigurationRedis;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 

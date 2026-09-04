@@ -8,7 +8,7 @@
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-uap-security-web</artifactId>
 </dependency>
 ```
@@ -83,14 +83,13 @@ public class WebClientProperties {
 ```
 
 ```java
-import com.github.dgavrikov.core.http.OverrideDefaultHttpRequestRetryStrategy;
-import com.github.dgavrikov.core.service.logging.filter.web.WebConfig;
-import com.github.dgavrikov.core.uap.config.OAuth2WebClientConfig;
-import com.github.dgavrikov.core.utils.Constants;
+import http.io.github.dgavrikov.core.OverrideDefaultHttpRequestRetryStrategy;
+import web.filter.logging.service.io.github.dgavrikov.core.WebConfig;
+import config.uap.io.github.dgavrikov.core.OAuth2WebClientConfig;
+import utils.io.github.dgavrikov.core.Constants;
 import org.apache.hc.client5.http.config.RequestConfig;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
-import org.apache.hc.core5.http.HttpStatus;
 import org.apache.hc.core5.util.TimeValue;
 import org.apache.hc.core5.util.Timeout;
 import org.springframework.context.annotation.Bean;
@@ -103,7 +102,6 @@ import javax.net.ssl.SSLException;
 import java.net.NoRouteToHostException;
 import java.net.UnknownHostException;
 import java.util.Arrays;
-import java.util.concurrent.TimeUnit;
 
 @Configuration
 @RequiredArgsConstructor
@@ -232,7 +230,7 @@ public class RestClientsConfig {
                 .uriBuilderFactory(factory)
                 .baseUrl(webClientProperties.getCustom().getBaseUrl())
                 // YYYY - Target system code according to the Information System Registry
-                .defaultHeader(Constants.SERVICE_TO, "YYYY") 
+                .defaultHeader(Constants.SERVICE_TO, "YYYY")
                 .build();
     }
 }
@@ -248,9 +246,9 @@ public class RestClientsConfig {
 > ⚠️ **Устарело (Deprecated):** Данный метод оставлен исключительно для обратной совместимости с legacy-модулями. Избегайте его использования в новом коде.
 
 ```java
-import com.github.dgavrikov.core.http.RetryBuilder;
-import com.github.dgavrikov.core.http.WebResponseWrapper;
-import com.github.dgavrikov.core.utils.Constants;
+import http.io.github.dgavrikov.core.RetryBuilder;
+import http.io.github.dgavrikov.core.WebResponseWrapper;
+import utils.io.github.dgavrikov.core.Constants;
 import org.springframework.web.client.RestClient;
 
 public class CustomRestClientImpl {
@@ -281,9 +279,9 @@ public class CustomRestClientImpl {
 Это стандартный подход для экосистемы Spring Boot 3.5. Повторные попытки прозрачно выполняются под капотом движком Apache HttpClient 5 внутри настроенной фабрики `ClientHttpRequestFactory`. Код клиента остается чистым и сфокусированным только на бизнес-логике.
 
 ```java
-import com.github.dgavrikov.core.http.WebResponseHandler;
-import com.github.dgavrikov.core.http.WebResponseWrapper;
-import com.github.dgavrikov.core.utils.Constants;
+import http.io.github.dgavrikov.core.WebResponseHandler;
+import http.io.github.dgavrikov.core.WebResponseWrapper;
+import utils.io.github.dgavrikov.core.Constants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.client.RestClient;
 

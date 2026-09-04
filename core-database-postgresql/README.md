@@ -8,7 +8,7 @@ Provides pre-configured HikariCP connection pooling, Liquibase integration, tran
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-database-postgresql</artifactId>
 </dependency>
 ```
@@ -16,7 +16,7 @@ Provides pre-configured HikariCP connection pooling, Liquibase integration, tran
 ### Import PostgresConfig
 
 ```java
-import com.github.dgavrikov.core.config.database.PostgresConfig;
+import io.github.dgavrikov.core.config.database.PostgresConfig;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
@@ -35,7 +35,7 @@ public class ImportConfig {
 spring:
   datasource:
     properties:
-      repository-packages: com.github.dgavrikov
+      repository-packages: io.github.dgavrikov
   liquibase:
     change-log: classpath:/db/changelog/db.master.yml
 ```
@@ -73,7 +73,7 @@ The following environment variables and application properties are available for
 An entity field-level annotation designed to automatically truncate string values to a specified maximum length before persisting them to the database, preventing data truncation errors.
 
 ```java
-import com.github.dgavrikov.core.database.annotation.TruncateString;
+import io.github.dgavrikov.core.database.annotation.TruncateString;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Table;

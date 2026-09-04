@@ -9,7 +9,7 @@
 
 ```yaml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-state-machine</artifactId>
 </dependency>
 ```
@@ -195,7 +195,7 @@ final class AccountWorkflow {
 ```java
 package com.github.dgavrikov.examples.infrastructure.db.adapter;
 
-import com.github.dgavrikov.core.sm.SmStorageAdapter;
+import sm.io.github.dgavrikov.core.SmStorageAdapter;
 import com.github.dgavrikov.examples.domain.domain.model.AccountOrder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

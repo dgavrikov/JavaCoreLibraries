@@ -8,7 +8,7 @@
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-redis</artifactId>
 </dependency>
 ```
@@ -20,7 +20,7 @@
 Активируйте встроенные компоненты инфраструктуры Redis, добавив класс `AutoConfigurationRedis` в область сканирования компонентов вашего конфигурационного класса:
 
 ```java
-import com.github.dgavrikov.core.redis.AutoConfigurationRedis;
+import redis.io.github.dgavrikov.core.AutoConfigurationRedis;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.Configuration;
 

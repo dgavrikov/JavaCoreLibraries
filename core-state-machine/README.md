@@ -6,7 +6,7 @@ Provides a robust, high-performance, and fully stateless finite state machine ar
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-state-machine</artifactId>
 </dependency>
 ```
@@ -180,7 +180,7 @@ The database adapter implements `SmStorageAdapter`, encapsulating the low-level 
 ```java
 package com.github.dgavrikov.examples.infrastructure.db.adapter;
 
-import com.github.dgavrikov.core.sm.SmStorageAdapter;
+import sm.io.github.dgavrikov.core.SmStorageAdapter;
 import com.github.dgavrikov.examples.domain.domain.model.AccountOrder;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;

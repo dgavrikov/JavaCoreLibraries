@@ -23,7 +23,7 @@ A monorepo containing a set of reusable corporate starter libraries and core uti
 3. Include the project as a **parent** dependency in your application's `pom.xml`:
    ```xml
    <parent>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-parent</artifactId>
        <version>3.5.0</version>
    </parent> 
@@ -47,7 +47,7 @@ Provides foundational functionality for logging, metrics monitoring, distributed
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-common-services</artifactId>
    </dependency>
    ```
@@ -57,8 +57,8 @@ Provides foundational functionality for logging, metrics monitoring, distributed
    @Configuration
    @ComponentScan(
      basePackages = {
-             "com.github.dgavrikov.core.service", // Logging, Monitoring, and Tracing services
-             "com.github.dgavrikov.core.config"   // Core JSON and mapping configurations
+             "io.github.dgavrikov.core.service", // Logging, Monitoring, and Tracing services
+             "io.github.dgavrikov.core.config"   // Core JSON and mapping configurations
      })
    public class ImportConfig {
    }
@@ -93,7 +93,7 @@ Below is an example of how to implement and use the configurator.
 ```java
 package com.github.dgavrikov.examples.config;
 
-import com.github.dgavrikov.core.config.SchedulerConfigurationBuilder;
+import config.io.github.dgavrikov.core.SchedulerConfigurationBuilder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.annotation.Bean;
@@ -180,7 +180,7 @@ Manages incoming and outgoing HTTP request headers to maintain execution context
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-correlation</artifactId>
    </dependency>
    ```
@@ -196,14 +196,14 @@ Provides seamless interaction with PostgreSQL relational databases.
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-database-postgresql</artifactId>
    </dependency>
    ```
 
 2. Import `PostgresConfig` into your configuration class:
    ```java
-   import com.github.dgavrikov.core.config.database.PostgresConfig;
+   import io.github.dgavrikov.core.config.database.PostgresConfig;
    import org.springframework.context.annotation.Configuration;
    import org.springframework.context.annotation.Import;
 
@@ -239,7 +239,7 @@ Provides out-of-the-box integration with Apache Kafka for event-driven messaging
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-kafka</artifactId>
    </dependency>
    ```
@@ -259,7 +259,7 @@ Automates high-performance logging for inbound and outbound HTTP requests and re
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-logbook-logging</artifactId>
    </dependency>
    ```
@@ -275,7 +275,7 @@ Provides integration with Redis and Redis Sentinel clusters for high-performance
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-redis</artifactId>
    </dependency>
    ```
@@ -299,7 +299,7 @@ Provides seamless integration with the centralized authentication and Identity P
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-uap-security-web</artifactId>
    </dependency>
    ```
@@ -317,21 +317,21 @@ Provides utilities for advanced XML processing, parsing, and data serialization.
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-xml</artifactId>
    </dependency>
    ```
 
 2. Enable the XML configuration in your configuration class:
    ```java
-   import com.github.dgavrikov.core.xml.AutoConfigurationXml;
+   import xml.io.github.dgavrikov.core.AutoConfigurationXml;
    import org.springframework.context.annotation.ComponentScan;
    import org.springframework.context.annotation.Configuration;
 
    @Configuration
    @ComponentScan(basePackages = {
-           "com.github.dgavrikov.core.xml.config",
-           "com.github.dgavrikov.core.xml.service"
+           "io.github.dgavrikov.core.xml.config",
+           "io.github.dgavrikov.core.xml.service"
    }, basePackageClasses = {AutoConfigurationXml.class})
    public class ImportConfig {
    }
@@ -344,7 +344,7 @@ Provides utilities for advanced XML processing, parsing, and data serialization.
        dgavrikov:
          core:
            xml:
-             properties: com.github.dgavrikov
+             properties: io.github.dgavrikov
    ```
 
 ## 9. core-state-machine
@@ -356,7 +356,7 @@ Provides a robust, high-performance, and fully stateless finite state machine ar
 1. Add the dependency to your `pom.xml`:
    ```xml
    <dependency>
-       <groupId>com.github.dgavrikov.core</groupId>
+       <groupId>io.github.dgavrikov</groupId>
        <artifactId>core-state-machine</artifactId>
    </dependency>
    ```
