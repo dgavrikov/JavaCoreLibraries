@@ -2,7 +2,7 @@ spring:
   main:
     web-application-type: servlet
   application:
-    name: ${APPLICATION_NAME:CODE.com.dgavr-default}
+    name: ${APPLICATION_NAME:CODE.app-name-default}
 logging:
   level:
     root: warn

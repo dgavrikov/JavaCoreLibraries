@@ -8,7 +8,7 @@
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-kafka</artifactId>
 </dependency>
 ```
@@ -77,8 +77,8 @@ custom:
 ### Вариант 1: Конфигурация для работы со строками (JSON) — 95% кейсов
 
 ```java
-import com.github.dgavrikov.core.kafka.config.KafkaConfigBuilder;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
+import config.kafka.io.github.dgavrikov.core.KafkaConfigBuilder;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -198,10 +198,10 @@ public class KafkaConfigBytesCustom {
 ```java
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.dgavrikov.core.kafka.AbstractKafkaProducerClient;
-import com.github.dgavrikov.core.kafka.exception.ProducerKafkaException;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
-import com.github.dgavrikov.core.service.logging.MaskingLog;
+import kafka.io.github.dgavrikov.core.AbstractKafkaProducerClient;
+import exception.kafka.io.github.dgavrikov.core.ProducerKafkaException;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
+import logging.service.io.github.dgavrikov.core.MaskingLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -244,7 +244,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
         try {
             // Сериализация DTO в строку на уровне приложения (KISS/SRP)
             String jsonPayload = objectMapper.writeValueAsString(request);
-            
+
             // Логируем исходный объект
             maskingLog.debug(log, request, "Message body: ");
 
@@ -283,10 +283,9 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
 Для сервисов, отправляющих файлы, изображения, Protobuf или Avro сегменты, объявите компонент с типами `<String, byte[]>`. Это полностью минует текстовые сериализаторы и обеспечивает железную безопасность типов на этапе компиляции:
 
 ```java
-import com.github.dgavrikov.core.kafka.AbstractKafkaProducerClient;
-import com.github.dgavrikov.core.kafka.AbstractKafkaProducerClient;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
-import com.github.dgavrikov.core.service.logging.MaskingLog;
+import kafka.io.github.dgavrikov.core.AbstractKafkaProducerClient;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
+import logging.service.io.github.dgavrikov.core.MaskingLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -317,7 +316,7 @@ public class BinaryReportProducerClient extends AbstractKafkaProducerClient<Stri
         String targetTopic = customKafkaProperties.getProducer().getTopics().get("report-binary-events");
 
         log.debug("Message body (bytes size): {}", bytes.length);
-        
+
         // Контроль на этапе компиляции: разрешен только byte[]. 
         // Попытка передать DTO или обычную строку вызовет ошибку компиляции.
         this.sendMessage(targetTopic, fileId, pdfBytes, headers);
@@ -334,7 +333,7 @@ public class BinaryReportProducerClient extends AbstractKafkaProducerClient<Stri
 Обрабатывает ровно одно сообщение из Kafka за один вызов poll.
 
 ```java
-import com.github.dgavrikov.core.kafka.KafkaConsumer;
+import kafka.io.github.dgavrikov.core.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -367,7 +366,7 @@ public class CustomKafkaConsumer implements KafkaConsumer<String> {
 Обрабатывает пачку сообщений, полученных за один вызов poll, что позволяет достичь максимальной пропускной способности.
 
 ```java
-import com.github.dgavrikov.core.kafka.KafkaConsumerBatch;
+import kafka.io.github.dgavrikov.core.KafkaConsumerBatch;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;

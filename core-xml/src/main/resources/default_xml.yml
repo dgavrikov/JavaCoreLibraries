@@ -1,6 +1,6 @@
-com:
+io:
   github:
     dgavrikov:
       core:
         xml:
-          properties: com.github.dgavrikov
+          properties: io.github.dgavrikov

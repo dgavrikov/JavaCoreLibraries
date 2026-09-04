@@ -8,7 +8,7 @@ Provides enterprise-ready, robust integration with Apache Kafka, featuring fully
 
 ```xml
 <dependency>
-    <groupId>com.github.dgavrikov.core</groupId>
+    <groupId>io.github.dgavrikov</groupId>
     <artifactId>core-kafka</artifactId>
 </dependency>
 ```
@@ -78,8 +78,8 @@ To register the infrastructure beans, define a configuration class utilizing the
 ### Option 1: Configuration for Text Messages (JSON) — 95% of use cases
 
 ```java
-import com.github.dgavrikov.core.kafka.config.KafkaConfigBuilder;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
+import config.kafka.io.github.dgavrikov.core.KafkaConfigBuilder;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -140,8 +140,8 @@ public class KafkaConfigCustom {
 If your service needs to send or consume binary data (e.g., files, Protobuf, Avro), use `ByteArraySerializer` and `ByteArrayDeserializer`:
 
 ```java
-import com.github.dgavrikov.core.kafka.config.KafkaConfigBuilder;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
+import config.kafka.io.github.dgavrikov.core.KafkaConfigBuilder;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
@@ -210,11 +210,10 @@ For typical JSON event streaming, declare your producer with `<String, String>` 
 ```java
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.github.dgavrikov.core.kafka.AbstractKafkaProducerClient;
-import com.github.dgavrikov.core.kafka.AbstractKafkaProducerClient;
-import com.github.dgavrikov.core.kafka.exception.ProducerKafkaException;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
-import com.github.dgavrikov.core.service.logging.MaskingLog;
+import kafka.io.github.dgavrikov.core.AbstractKafkaProducerClient;
+import exception.kafka.io.github.dgavrikov.core.ProducerKafkaException;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
+import logging.service.io.github.dgavrikov.core.MaskingLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -258,7 +257,7 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
         try {
             // Logging source object
             maskingLog.debug(log, request, "Message body: ");
-            
+
             // Application-level serialization preserves Clean Architecture & KISS
             String jsonPayload = objectMapper.writeValueAsString(request);
 
@@ -297,9 +296,9 @@ public class CustomKafkaProduceClientImpl extends AbstractKafkaProducerClient<St
 For services transferring files, imagery, Protobuf, or Avro segments, declare the component with `<String, byte[]>` types. This bypasses text serializers completely and provides absolute compile-time safety:
 
 ```java
-import com.github.dgavrikov.core.kafka.AbstractKafkaProducerClient;
-import com.github.dgavrikov.core.kafka.properties.KafkaProperties;
-import com.github.dgavrikov.core.service.logging.MaskingLog;
+import kafka.io.github.dgavrikov.core.AbstractKafkaProducerClient;
+import properties.kafka.io.github.dgavrikov.core.KafkaProperties;
+import logging.service.io.github.dgavrikov.core.MaskingLog;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.stereotype.Component;
@@ -346,7 +345,7 @@ The library supports two consumption models: processing messages individually (s
 Processes exactly one Kafka record per poll invocation.
 
 ```java
-import com.github.dgavrikov.core.kafka.KafkaConsumer;
+import kafka.io.github.dgavrikov.core.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;
@@ -379,7 +378,7 @@ public class CustomKafkaConsumer implements KafkaConsumer<String> {
 Processes a collection of Kafka records fetched within a single poll invocation, maximizing high-throughput delivery.
 
 ```java
-import com.github.dgavrikov.core.kafka.KafkaConsumerBatch;
+import kafka.io.github.dgavrikov.core.KafkaConsumerBatch;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.kafka.annotation.KafkaListener;

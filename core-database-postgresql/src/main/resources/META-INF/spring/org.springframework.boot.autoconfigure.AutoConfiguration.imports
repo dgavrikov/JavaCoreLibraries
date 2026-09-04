@@ -1,1 +1,1 @@
-com.github.dgavrikov.core.database.service.impl.DbFactoryImpl
+io.github.dgavrikov.core.database.service.impl.DbFactoryImpl
