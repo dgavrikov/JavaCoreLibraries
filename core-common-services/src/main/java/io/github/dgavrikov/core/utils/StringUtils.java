@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 @UtilityClass
 public class StringUtils {
     private static final Pattern pattern =
-            Pattern.compile("(com\\.github\\.dgavrikov.*?)(?=:)(.)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
+            Pattern.compile("(io\\.github\\.dgavrikov.*?)(?=:)(.)", Pattern.DOTALL | Pattern.CASE_INSENSITIVE);
 
     public static String replaceException(String text) {
         return org.apache.commons.lang3.StringUtils.isEmpty(text) ? ""
