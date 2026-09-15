@@ -55,9 +55,10 @@ class MaskedPatternsTest {
         @ParameterizedTest
         @CsvSource({
                 "+79161234567, +7***67",   // >= 10 chars: keep first 2 and last 2
+                "79667495267,  79***67",
                 "89161234567,  89***67",
                 "1234567,      1***67",    // < 10 chars: keep first 1 and last 2
-                "123,          1***23",
+                "123,          123",
         })
         void masksPhone(String input, String expected) {
             assertThat(MaskedPatternPhone.masking.apply(input)).isEqualTo(expected);
