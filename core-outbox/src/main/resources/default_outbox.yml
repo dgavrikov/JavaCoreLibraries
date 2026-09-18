@@ -1,0 +1,20 @@
+io:
+  github:
+    dgavrikov:
+      core:
+        outbox:
+          in-memory-queue:
+            capacity: ${OUTBOX_IN_MEMORY_QUEUE_CAPACITY:10000}
+          batch-publisher:
+            initial-delay-ms: ${OUTBOX_BATCH_PUBLISHER_INITIAL_DELAY_MS:500}
+            scan-memory-queue-interval-delay-ms: ${OUTBOX_BATCH_PUBLISHER_SCAN_INTERVAL_MS:25}
+            batch-size: ${OUTBOX_BATCH_PUBLISHER_BATCH_SIZE:50}
+          recovery-props:
+            initial-delay-ms: ${OUTBOX_RECOVERY_INITIAL_DELAY_MS:5000}
+            recovery-interval-delay-ms: ${OUTBOX_RECOVERY_INTERVAL_DELAY_MS:60000}
+            batch-size: ${OUTBOX_RECOVERY_BATCH_SIZE:100}
+            time-depth-sec: ${OUTBOX_RECOVERY_TIME_DEPTH_SEC:30}
+          cleanup-props:
+            cron-expression: "${OUTBOX_CLEANUP_CRON_EXPRESSION:0 0 0 * * *}"
+            depth-in-hour: ${OUTBOX_CLEANUP_DEPTH_IN_HOUR:72}
+            batch-size: ${OUTBOX_CLEANUP_BATCH_SIZE:10000}
