@@ -12,6 +12,7 @@ A monorepo containing a set of reusable corporate starter libraries and core uti
 7. [core-uap-security-web](#7-core-uap-security-web) – Authentication and security service integration.
 8. [core-xml](#8-core-xml) – XML processing and data serialization utilities.
 9. [core-state-machine](#9-core-state-machine) – Lightweight declarative finite state machine library optimized for High Load conditions.
+10. [core-outbox] – Transactional Outbox event log library optimized for Java 21 Virtual Threads execution.
 
 ## Build and Installation
 
@@ -363,3 +364,60 @@ Provides a robust, high-performance, and fully stateless finite state machine ar
 2. Configure application properties: [YAML Configuration Guide](./core-state-machine/README.md#yaml-configuration-reference)
 3. Set up custom configuration classes: [Java Config Guide](./core-state-machine/README.md#java-configuration)
 4. Implement a domain model and handlers: [Implementation Examples](./core-state-machine/README.md#domain-model-implementation-example)
+
+## 10. core-outbox
+
+Provides a robust, isolated, and high-performance implementation of the **Transactional Outbox** pattern, specifically 
+designed for high-throughput processing and brokerage systems. It guarantees **At-Least-Once** event delivery with zero 
+enterprise overhead, completely eliminating heavy AOP aspects and Spring proxy-magic.
+
+### Key Features
+1. **Explicit Thread Separation:** Distinct execution pools (TaskScheduler) are registered for the low-latency critical 
+path (event publishing) and heavy background database tasks (recovery/purge). Database maintenance routines will never 
+block broker event ingestion.
+2. **Backpressure Guard:** Automated database protection. If the in-memory queue utilization exceeds 50%, the background 
+polling worker (Recovery) yields execution cycles, eliminating parasitic database overhead during high load.
+3. **Lock-Free Rate Limiting:** High-throughput throttling mapped per recipient group. Implemented via atomic clocks 
+(AtomicLong) and native-compliant thread parking (LockSupport.parkNanos). Scales efficiently across millions of virtual 
+threads without blocking core carrier operating system threads.
+4. **Split-Batching Update:** Network round-trip minimization. Successful execution statuses are updated via a single 
+batch `WHERE id IN (:ids)` query, reducing network and disk I/O strain up to 50x.
+5. **Zero-Allocation Data Mapping:** Custom stream-based database row mapping via clean functional lambdas, preventing 
+intermediate garbage collection overhead on high-load critical processing paths.
+
+## Quick Start
+
+1. Add the dependency to your `pom.xml`:
+   ```xml
+   <dependency>
+       <groupId>io.github.dgavrikov</groupId>
+       <artifactId>core-state-machine</artifactId>
+   </dependency>
+   ```
+2. The library operates as a self-contained, auto-configuring starter. The configuration layer **OutboxAutoConfiguration** 
+is booted automatically using the modern `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 
+standard. No additional manual @Import or @ComponentScan directives are required within your application.
+   ```yaml
+   databaseChangeLog:
+    - include:
+      file: classpath:/db/changelog/core-outbox/db.changelog-outbox-1.0.yml
+   ```
+3. Include the schema migration script for the outbox_events table into your primary Liquibase changelog-master file:
+   ```yaml
+   databaseChangeLog:
+    - include:
+      file: classpath:/db/changelog/core-outbox/db.changelog-outbox-1.0.yml
+   ```
+4. Fine-tune processing boundaries and constraints within your application.yml if necessary:
+```yaml
+io:
+  github:
+    dgavrikov:
+      core:
+        outbox:
+          in-memory-queue:
+            capacity: ${OUTBOX_IN_MEMORY_QUEUE_CAPACITY:10000}
+          batch-publisher:
+            scan-memory-queue-interval-delay-ms: ${OUTBOX_BATCH_PUBLISHER_SCAN_INTERVAL_MS:25}
+            batch-size: ${OUTBOX_BATCH_PUBLISHER_BATCH_SIZE:50}
+```

@@ -25,10 +25,11 @@
         <module>core-redis</module>
         <module>core-uap-security-web</module>
         <module>core-state-machine</module>
+        <module>core-outbox</module>
     </modules>
 
     <properties>
-        <revision>3.5.4</revision>
+        <revision>3.5.5</revision>
         <encoding>UTF-8</encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -85,6 +86,11 @@
             <dependency>
                 <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-kafka</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dgavrikov</groupId>
+                <artifactId>core-outbox</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>

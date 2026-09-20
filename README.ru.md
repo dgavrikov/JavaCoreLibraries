@@ -12,6 +12,7 @@
 7. [core-uap-security-web](#7-core-uap-security-web) – библиотека для интеграции с сервисом аутентификации и безопасности.
 8. [core-xml](#8-core-xml) – библиотека для обработки XML и сериализации данных.
 9. [core-state-machine](#9-core-state-machine) – библиотека легковесной декларативной машины состояний, оптимизированная под High Load.
+10. [core-outbox](#10-core-outbox) – библиотека транзакционного лога событий (Transactional Outbox), оптимизированная под виртуальные потоки.
 
 ## Сборка и установка
 
@@ -364,3 +365,41 @@ public class MetricScheduler {
 2. Настройте конфигурацию параметров: [Ссылка на руководство по YAML](./core-state-machine/README.ru.md#конфигурация-yaml)
 3. Создайте классы конфигурации: [Ссылка на руководство по Java Config](./core-state-machine/README.ru.md#конфигурация-классов-java)
 4. Пример реализации доменной модели и хэндлеров: [Ссылка на примеры](./core-state-machine/README.ru.md#пример-реализации-доменной-модели)
+
+## 10. core-outbox
+
+Предоставляет надежную, изолированную и высокопроизводительную реализацию паттерна **Transactional Outbox**, разработанную 
+специально для высоконагруженных процессинговых и брокерских систем. Гарантирует доставку сообщений **At-Least-Once** 
+без enterprise-оверхеда, тяжелых AOP-аспектов и Spring-магии.
+
+### Как подключить
+
+1. Добавьте зависимость в ваш `pom.xml`:
+   ```xml
+   <dependency>
+       <groupId>io.github.dgavrikov</groupId>
+       <artifactId>core-outbox</artifactId>
+   </dependency>
+   ```
+2. Библиотека поставляется как автономный автоконфигурируемый стартер. Конфигурация **OutboxAutoConfiguration** подгружается 
+автоматически через стандарт `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. Никаких 
+дополнительных @Import или @ComponentScan в вашем приложении прописывать **не требуется**.
+3. Включите миграцию таблицы `outbox_events` в ваш основной Liquibase `changelog-мастер`:
+   ```yaml
+   databaseChangeLog:
+    - include:
+      file: classpath:/db/changelog/core-outbox/db.changelog-outbox-1.0.yml
+   ```
+4. Переопределите параметры и лимиты в вашем application.yml (при необходимости):
+```yaml
+io:
+  github:
+    dgavrikov:
+      core:
+        outbox:
+          in-memory-queue:
+            capacity: ${OUTBOX_IN_MEMORY_QUEUE_CAPACITY:10000}
+          batch-publisher:
+            scan-memory-queue-interval-delay-ms: ${OUTBOX_BATCH_PUBLISHER_SCAN_INTERVAL_MS:25}
+            batch-size: ${OUTBOX_BATCH_PUBLISHER_BATCH_SIZE:50}
+```
