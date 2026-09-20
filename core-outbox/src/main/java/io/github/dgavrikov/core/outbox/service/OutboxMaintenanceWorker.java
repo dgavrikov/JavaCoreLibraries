@@ -77,7 +77,7 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
         log.info("Starting purge of successfully sent outbox events...");
 
         OffsetDateTime retentionBoundary = OffsetDateTime.now()
-                .minusDays(outboxProperties.cleanupProps().depthInHour());
+                .minusHours(outboxProperties.cleanupProps().depthInHour());
 
         long deletedRows = 0L;
         try {

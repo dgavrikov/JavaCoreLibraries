@@ -41,7 +41,6 @@ public class OutboxAutoConfiguration {
         return new ArrayBlockingQueue<>(outboxProperties.inMemoryQueue().capacity());
     }
 
-    // Изолированный планировщик для критического пути (отправка)
     @Bean
     public TaskScheduler outboxPublisherScheduler() {
         boolean isVirtual = env.getProperty("spring.threads.virtual.enabled", Boolean.class, false);

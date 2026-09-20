@@ -118,7 +118,6 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                 .addValue("timeBoundary", timeBoundary)
                 .addValue("batchSize", batchSize);
 
-        // Использование кастомного маппера (Zero-allocation / Лямбда без создания лишних объектов на строку)
         return namedParameterJdbcTemplate.query(SQL_FIND_ABANDONED, params, this::mapRowToEvent);
     }
 
@@ -148,7 +147,6 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
     private OutboxEvent mapRowToEvent(ResultSet rs, int rowNum) throws SQLException {
         String typeStr = rs.getString("event_type");
-        // Чтобы восстановить интерфейс OutboxEventType, оборачиваем его в анонимную структуру или простейшую record-обертку
         OutboxEventType eventType = () -> typeStr;
 
         return OutboxEvent.builder()
