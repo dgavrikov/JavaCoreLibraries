@@ -1,7 +1,6 @@
 package io.github.dgavrikov.core.outbox.service;
 
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
-import io.github.dgavrikov.core.outbox.model.OutboxEventType;
 import io.github.dgavrikov.core.outbox.model.OutboxPayloadPlugin;
 import io.github.dgavrikov.core.outbox.model.OutboxStatus;
 import io.github.dgavrikov.core.outbox.properties.OutboxProperties;
@@ -22,13 +21,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
 public class OutboxBatchPublisher implements ApplicationListener<ApplicationReadyEvent> {
     private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
-    private final Map<OutboxEventType, OutboxPayloadPlugin> factoryRegistry;
+    private final Map<String, OutboxPayloadPlugin> factoryRegistry;
     // GroupID -> Лимитер
     private final Map<String, VirtualThreadRateLimiter> limitersRegistry = new ConcurrentHashMap<>();
     private final TaskScheduler outboxScheduler;
@@ -48,7 +46,11 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
         factoryRegistry = CollectionUtils.isEmpty(outboxPayloadPluginCollection)
                 ? Map.of()
                 : outboxPayloadPluginCollection.stream()
-                .collect(Collectors.toMap(OutboxPayloadPlugin::getSupportedType, Function.identity()));
+                .collect(Collectors.toMap(
+                        plugin -> plugin.getSupportedType().name(),
+                        plugin -> plugin,
+                        (existing, replacement) -> existing
+                ));
 
         outboxPayloadPluginCollection.forEach(plugin -> {
             if (plugin.getTpsLimit() > 0) {
@@ -83,9 +85,9 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
 
         List<Long> successIds = new ArrayList<>(events.size());
 
-        for(var event : events) {
+        for (var event : events) {
             try {
-                var plugin = factoryRegistry.get(event.eventType());
+                var plugin = factoryRegistry.get(event.eventType().name());
                 if (plugin == null) {
                     var reason = "Outbox plugin not registered for " + event.eventType()
                             + ". Event #" + event.id() + " not send.";
@@ -101,15 +103,12 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
 
                 plugin.sendEvent(event);
                 successIds.add(event.id());
-                //outboxRepository.updateEventStatus(event.id(), OutboxStatus.SENT, null);
             } catch (Exception e) {
                 log.error("Fail to sent Event #{}.", event.id(), e);
-                // Не помечаем как ошибку т.к. может быть просто недоступность и отправиться потом.
-                // Возможно, на будущее надо заложиться на повторы в БД
             }
         }
 
-        if(!successIds.isEmpty()) {
+        if (!successIds.isEmpty()) {
             try {
                 outboxRepository.updateEventStatusBatch(successIds, OutboxStatus.SENT);
                 log.trace("Successfully updated status to SENT for {} events.", successIds.size());

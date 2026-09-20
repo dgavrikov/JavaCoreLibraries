@@ -25,7 +25,6 @@ import java.util.Collection;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
 
-//@Configuration(proxyBeanMethods = false) or @AutoConfiguration
 @AutoConfiguration
 @RequiredArgsConstructor
 @ConditionalOnClass(NamedParameterJdbcTemplate.class)
@@ -53,7 +52,7 @@ public class OutboxAutoConfiguration {
     }
 
     @Bean
-    public TaskScheduler outboxScheduler() {
+    public TaskScheduler outboxMaintenanceScheduler() {
         boolean isVirtual = env.getProperty("spring.threads.virtual.enabled", Boolean.class, false);
 
         return new SchedulerConfigurationBuilder("outbox-maintenance-")

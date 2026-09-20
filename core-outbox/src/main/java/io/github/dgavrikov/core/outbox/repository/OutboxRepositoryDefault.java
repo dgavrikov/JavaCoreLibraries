@@ -35,7 +35,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
             SET status = :status, 
                 reason = :reason, 
                 updated_at = NOW() 
-            WHERE id IN (:ids)
+            WHERE id = ANY (CAST(:ids AS BIGITN[]))
             """;
 
     @Language("SQL")
@@ -85,7 +85,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
         String sanitizedReason = StringUtils.isBlank(reason) ? null : reason.trim();
 
         var params = new MapSqlParameterSource()
-                .addValue("ids", eventId)
+                .addValue("ids", new Long[]{eventId})
                 .addValue("status", outboxStatus.name())
                 .addValue("reason", sanitizedReason);
 
@@ -99,7 +99,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                 .addValue("type", eventType.name())
                 .addValue("agr_id", aggregateId)
                 .addValue("payload", payload)
-                .addValue("status",outboxStatus.name());
+                .addValue("status", outboxStatus.name());
 
         var keyHolder = new GeneratedKeyHolder();
         namedParameterJdbcTemplate.update(SQL_INSERT, params, keyHolder, new String[]{"id"});
@@ -139,7 +139,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
         if (eventIds == null || eventIds.isEmpty()) return;
 
         var params = new MapSqlParameterSource()
-                .addValue("ids", eventIds)
+                .addValue("ids", eventIds.toArray(new Long[0]))
                 .addValue("status", outboxStatus.name())
                 .addValue("reason", null);
 

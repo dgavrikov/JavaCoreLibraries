@@ -148,7 +148,6 @@ databaseChangeLog:
             columns:
               - column:
                   name: created_at
-                  order: ASC
             where: "status = 'SENT'"
 ```
 

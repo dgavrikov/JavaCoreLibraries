@@ -13,14 +13,13 @@ import org.springframework.transaction.support.TransactionSynchronizationManager
 import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.BlockingQueue;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 @Slf4j
 public class OutboxPlatformCoordinator {
 
     private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
-    private final Map<OutboxEventType, OutboxPayloadPlugin> factoryRegistry;
+    private final Map<String, OutboxPayloadPlugin> factoryRegistry;
     private final OutboxRepository outboxRepository;
 
     public OutboxPlatformCoordinator(
@@ -32,11 +31,15 @@ public class OutboxPlatformCoordinator {
         factoryRegistry = CollectionUtils.isEmpty(outboxPayloadPluginCollection)
                 ? Map.of()
                 : outboxPayloadPluginCollection.stream()
-                .collect(Collectors.toMap(OutboxPayloadPlugin::getSupportedType, Function.identity()));
+                .collect(Collectors.toMap(
+                        plugin -> plugin.getSupportedType().name(),
+                        plugin -> plugin,
+                        (existing, replacement) -> existing
+                ));
     }
 
     public void saveEvent(String aggregateId, OutboxEventType eventType, Object obj) {
-        var plugin = factoryRegistry.get(eventType);
+        var plugin = factoryRegistry.get(eventType.name());
         if (plugin == null)
             throw new IllegalArgumentException("Plugin not found for " + eventType);
 
