@@ -1,5 +1,6 @@
 package io.github.dgavrikov.core.outbox;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.dgavrikov.core.config.SchedulerConfigurationBuilder;
 import io.github.dgavrikov.core.config.YamlPropertyLoaderFactory;
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
@@ -63,9 +64,10 @@ public class OutboxAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(OutboxRepository.class)
     public OutboxRepository outboxRepository(
-            NamedParameterJdbcTemplate namedParameterJdbcTemplate
+            NamedParameterJdbcTemplate namedParameterJdbcTemplate,
+            ObjectMapper objectMapper
     ){
-        return new OutboxRepositoryDefault(namedParameterJdbcTemplate);
+        return new OutboxRepositoryDefault(namedParameterJdbcTemplate, objectMapper);
     }
 
     @Bean
@@ -73,7 +75,7 @@ public class OutboxAutoConfiguration {
     public OutboxBatchPublisher outboxBatchPublisher(
             TaskScheduler outboxPublisherScheduler,
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
-            Collection<OutboxPayloadPlugin> outboxPayloadPluginCollection,
+            Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository
     ) {
@@ -95,7 +97,7 @@ public class OutboxAutoConfiguration {
     @ConditionalOnMissingBean(OutboxPlatformCoordinator.class)
     public OutboxPlatformCoordinator outboxPlatformCoordinator(
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
-            Collection<OutboxPayloadPlugin> outboxPayloadPluginCollection,
+            Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxRepository outboxRepository
     ){
         return new OutboxPlatformCoordinator(outboxMemoryQueue, outboxPayloadPluginCollection, outboxRepository);

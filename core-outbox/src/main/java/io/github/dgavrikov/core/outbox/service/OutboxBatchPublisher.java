@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 @Slf4j
 public class OutboxBatchPublisher implements ApplicationListener<ApplicationReadyEvent> {
     private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
-    private final Map<String, OutboxPayloadPlugin> factoryRegistry;
+    private final Map<String, OutboxPayloadPlugin<?>> factoryRegistry;
     // GroupID -> Лимитер
     private final Map<String, VirtualThreadRateLimiter> limitersRegistry = new ConcurrentHashMap<>();
     private final TaskScheduler outboxScheduler;
@@ -34,9 +34,9 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
     private final OutboxRepository outboxRepository;
 
     public OutboxBatchPublisher(
-            @Qualifier("outboxScheduler") TaskScheduler outboxScheduler,
+            @Qualifier("outboxPublisherScheduler") TaskScheduler outboxScheduler,
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
-            Collection<OutboxPayloadPlugin> outboxPayloadPluginCollection,
+            Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository) {
         this.outboxMemoryQueue = outboxMemoryQueue;
