@@ -102,7 +102,7 @@ databaseChangeLog:
                   constraints:
                     nullable: false
               - column:
-                  name: aggregate_id
+                  name: key_id
                   type: VARCHAR(50)
                   constraints:
                     nullable: false
@@ -111,6 +111,11 @@ databaseChangeLog:
                   type: JSONB
                   constraints:
                     nullable: false
+              - column:
+                  name: headers
+                  type: JSONB
+                  constraints:
+                    nullable: true
               - column:
                   name: status
                   type: VARCHAR(64)
@@ -139,6 +144,8 @@ databaseChangeLog:
             tableName: outbox_events
             columns:
               - column:
+                  name: updated_at
+              - column:
                   name: id
             where: "status = 'NEW'"
 
@@ -166,9 +173,11 @@ import io.github.dgavrikov.core.outbox.model.OutboxPayloadPlugin;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
+import java.util.Map;
+
 @Component
 @RequiredArgsConstructor
-public class AccountCreatedKafkaPlugin implements OutboxPayloadPlugin {
+public class AccountCreatedKafkaPlugin implements OutboxPayloadPlugin<AccountDto> {
 
     private final KafkaTemplate<String, String> kafkaTemplate;
     private final ObjectMapper objectMapper;
@@ -179,12 +188,17 @@ public class AccountCreatedKafkaPlugin implements OutboxPayloadPlugin {
     }
 
     @Override
-    public String createPayload(Object sourceData) {
+    public String createPayload(AccountDto sourceData) {
         try {
             return objectMapper.writeValueAsString(sourceData);
         } catch (Exception e) {
             throw new RuntimeException("Payload serialization error", e);
         }
+    }
+
+    @Override
+    public String extractKeyId(AccountDto sourceData) {
+        return sourceData.getNumber();
     }
 
     @Override

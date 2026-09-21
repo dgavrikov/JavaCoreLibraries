@@ -6,11 +6,12 @@ import io.github.dgavrikov.core.outbox.model.OutboxStatus;
 
 import java.time.OffsetDateTime;
 import java.util.List;
+import java.util.Map;
 
 public interface OutboxRepository {
     void updateEventStatus(Long eventId, OutboxStatus outboxStatus, String reason);
 
-    OutboxEvent save(OutboxEventType eventType, String aggregateId, String payload, OutboxStatus outboxStatus);
+    OutboxEvent save(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers, OutboxStatus outboxStatus);
 
     List<OutboxEvent> findAbandonedEventsForUpdate(OffsetDateTime dateTime, int batchSize);
 

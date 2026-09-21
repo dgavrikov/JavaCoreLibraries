@@ -4,38 +4,33 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;
 
 public final class VirtualThreadRateLimiter {
+    private final static long DEFAULT_ANYTHING = 1_000_000_000L;
     private final long nanoDelayBetweenRequests;
     private final AtomicLong nextReleaseTime = new AtomicLong(0L);
 
     public VirtualThreadRateLimiter(int tps) {
         // Вычисляем задержку в наносекундах между сообщениями для достижения целевого TPS
-        this.nanoDelayBetweenRequests = tps > 0 ? 1_000_000_000L / tps : 0L;
+        this.nanoDelayBetweenRequests = tps > 0 ? DEFAULT_ANYTHING / tps : 0L;
         this.nextReleaseTime.set(System.nanoTime());
     }
 
     public void acquire() {
         if (nanoDelayBetweenRequests == 0) return;
 
-        long now;
-        long allowedTime;
-        do {
-            now = System.nanoTime();
-            long currentReleaseTime = nextReleaseTime.get();
-            // Если мы отстали от графика, стартуем от текущего момента
-            long baseTime = Math.max(now, currentReleaseTime);
-            allowedTime = baseTime + nanoDelayBetweenRequests;
+        // Поток атомарно за ОДИН проход резервирует свой уникальный временной слот
+        long allowedTime = nextReleaseTime.getAndAdd(nanoDelayBetweenRequests);
+        long now = System.nanoTime();
 
-            // Lock-free обновление времени следующего слота
-            if (nextReleaseTime.compareAndSet(currentReleaseTime, allowedTime)) {
-                break;
+        // Защита от "накопленного оведрафта" после простоя (холодный старт)
+        if (now - allowedTime > DEFAULT_ANYTHING) {
+            if (nextReleaseTime.compareAndSet(allowedTime + nanoDelayBetweenRequests, now + nanoDelayBetweenRequests)) {
+                allowedTime = now;
             }
-        } while (true);
+        }
 
-        long sleepTimeNanos = allowedTime - nanoDelayBetweenRequests - now;
-
+        long sleepTimeNanos = allowedTime - now;
         if (sleepTimeNanos > 0) {
-            // Для виртуальных потоков LockSupport.parkNanos — это идеальный, native-compliant способ
-            // припарковаться в памяти без блокировки Carrier-потока ОС.
+            // Виртуальный поток засыпает в памяти, освобождая Carrier-поток ОС
             LockSupport.parkNanos(sleepTimeNanos);
         }
     }

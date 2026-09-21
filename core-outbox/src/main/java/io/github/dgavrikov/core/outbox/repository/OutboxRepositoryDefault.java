@@ -1,5 +1,8 @@
 package io.github.dgavrikov.core.outbox.repository;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxEventType;
 import io.github.dgavrikov.core.outbox.model.OutboxStatus;
@@ -16,17 +19,15 @@ import org.springframework.transaction.annotation.Transactional;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
-import java.util.List;
-import java.util.Objects;
-
+import java.util.*;
 @Slf4j
 @RequiredArgsConstructor
 public class OutboxRepositoryDefault implements OutboxRepository {
 
     @Language("SQL")
     private static final String SQL_INSERT = """
-            INSERT INTO outbox_events(event_type, aggregate_id, payload, status, created_at, updated_at)
-            VALUES (:type, :agr_id, :payload::jsonb, :status, NOW(), NOW())
+            INSERT INTO outbox_events(event_type, key_id, payload, headers, status, created_at, updated_at)
+            VALUES (:type, :key_id, :payload::jsonb, :headers::jsonb, :status, NOW(), NOW())
             """;
 
     @Language("SQL")
@@ -35,7 +36,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
             SET status = :status, 
                 reason = :reason, 
                 updated_at = NOW() 
-            WHERE id = ANY (CAST(:ids AS BIGITN[]))
+            WHERE id = ANY (CAST(:ids AS BIGINT[]))
             """;
 
     @Language("SQL")
@@ -54,9 +55,9 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                         SET updated_at = NOW()
                         FROM targets t
                         WHERE oe.id = t.id
-                        RETURNING oe.id, oe.event_type, oe.aggregate_id, oe.payload
+                        RETURNING oe.id, oe.event_type, oe.key_id, oe.payload, oe.headers
                     )
-                    SELECT id, event_type, aggregate_id, payload FROM updated
+                    SELECT id, event_type, key_id, payload, headers FROM updated
             """;
 
     @Language("SQL")
@@ -79,6 +80,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
             """;
 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
+    private final ObjectMapper objectMapper;
 
     @Override
     public void updateEventStatus(Long eventId, OutboxStatus outboxStatus, String reason) {
@@ -93,24 +95,32 @@ public class OutboxRepositoryDefault implements OutboxRepository {
     }
 
     @Override
-    public OutboxEvent save(OutboxEventType eventType, String aggregateId, String payload, OutboxStatus outboxStatus) {
+    public OutboxEvent save(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers, OutboxStatus outboxStatus) {
 
-        var params = new MapSqlParameterSource()
-                .addValue("type", eventType.name())
-                .addValue("agr_id", aggregateId)
-                .addValue("payload", payload)
-                .addValue("status", outboxStatus.name());
+        try {
+            String jsonHeaders = objectMapper.writeValueAsString(headers);
 
-        var keyHolder = new GeneratedKeyHolder();
-        namedParameterJdbcTemplate.update(SQL_INSERT, params, keyHolder, new String[]{"id"});
-        Long outboxEventId = Objects.requireNonNull(keyHolder.getKeyAs(Long.class), "Generated ID cannot be null");
+            var params = new MapSqlParameterSource()
+                    .addValue("type", eventType.name())
+                    .addValue("key_id", keyId)
+                    .addValue("payload", payload)
+                    .addValue("headers", jsonHeaders)
+                    .addValue("status", outboxStatus.name());
 
-        return OutboxEvent.builder()
-                .id(outboxEventId)
-                .eventType(eventType)
-                .aggregateId(aggregateId)
-                .payload(payload)
-                .build();
+            var keyHolder = new GeneratedKeyHolder();
+            namedParameterJdbcTemplate.update(SQL_INSERT, params, keyHolder, new String[]{"id"});
+            Long outboxEventId = Objects.requireNonNull(keyHolder.getKeyAs(Long.class), "Generated ID cannot be null");
+
+            return OutboxEvent.builder()
+                    .id(outboxEventId)
+                    .eventType(eventType)
+                    .keyId(keyId)
+                    .payload(payload)
+                    .headers(headers != null ? headers : Map.of())
+                    .build();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Error serializing headers for OutboxEvent",e);
+        }
     }
 
     public List<OutboxEvent> findAbandonedEventsForUpdate(OffsetDateTime timeBoundary, int batchSize) {
@@ -149,11 +159,19 @@ public class OutboxRepositoryDefault implements OutboxRepository {
         String typeStr = rs.getString("event_type");
         OutboxEventType eventType = () -> typeStr;
 
-        return OutboxEvent.builder()
-                .id(rs.getLong("id"))
-                .eventType(eventType)
-                .aggregateId(rs.getString("aggregate_id"))
-                .payload(rs.getString("payload"))
-                .build();
+        String rawHeaders = rs.getString("headers");
+
+        try {
+            return OutboxEvent.builder()
+                    .id(rs.getLong("id"))
+                    .eventType(eventType)
+                    .keyId(rs.getString("key_id"))
+                    .headers(objectMapper.readValue(rawHeaders, new TypeReference<>() {
+                    }))
+                    .payload(rs.getString("payload"))
+                    .build();
+        } catch (JsonProcessingException e) {
+            throw new RuntimeException("Error de-serializing headers for OutboxEvent", e);
+        }
     }
 }

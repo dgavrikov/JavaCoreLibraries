@@ -19,12 +19,12 @@ import java.util.stream.Collectors;
 public class OutboxPlatformCoordinator {
 
     private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
-    private final Map<String, OutboxPayloadPlugin> factoryRegistry;
+    private final Map<String, OutboxPayloadPlugin<?>> factoryRegistry;
     private final OutboxRepository outboxRepository;
 
     public OutboxPlatformCoordinator(
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
-            Collection<OutboxPayloadPlugin> outboxPayloadPluginCollection,
+            Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxRepository outboxRepository) {
         this.outboxMemoryQueue = outboxMemoryQueue;
         this.outboxRepository = outboxRepository;
@@ -38,22 +38,65 @@ public class OutboxPlatformCoordinator {
                 ));
     }
 
-    public void saveEvent(String aggregateId, OutboxEventType eventType, Object obj) {
+    /**
+     * Сценарий 1: Фабричный метод для Application-слоя (Оркестрация).
+     * Позволяет достать строго типизированный плагин наружу, чтобы собрать payload
+     * за рамками или внутри транзакции, подтянув любые связанные сущности.
+     * @param eventType Тип события.
+     */
+    @SuppressWarnings("unchecked")
+    public <T> OutboxPayloadPlugin<T> getPlugin(OutboxEventType eventType) {
         var plugin = factoryRegistry.get(eventType.name());
-        if (plugin == null)
-            throw new IllegalArgumentException("Plugin not found for " + eventType);
+        if (plugin == null) {
+            throw new IllegalArgumentException("Plugin not found for event type: " + eventType);
+        }
+        return (OutboxPayloadPlugin<T>) plugin;
+    }
 
-        var payload = plugin.createPayload(obj);
+    /**
+     * Сценарий 2: Прямое сквозное сохранение.
+     * Принимает строго типизированный контекст T, сам извлекает keyId, payload и headers через плагин.
+     * @param eventType Тип события.
+     * @param <T>
+     */
+    public <T> void saveEvent(OutboxEventType eventType, T context) {
+        OutboxPayloadPlugin<T> plugin = getPlugin(eventType);
 
-        var event = outboxRepository.save(eventType, aggregateId, payload, OutboxStatus.NEW);
+        String keyId = plugin.extractKeyId(context);
+        String payload = plugin.createPayload(context);
+        Map<String, String> headers = plugin.createHeaders(context);
+
+        saveAndEnqueue(eventType, keyId, payload, headers);
+    }
+
+    /**
+     * Сценарий 3: Сохранение предсобранного ивента.
+     * Используется, когда Application-слой сам вызвал плагин, сделал сложный маппинг,
+     * и хочет просто зафиксировать отправку в БД без привязки к конкретной бизнес-сущности.
+     * @param eventType Тип события.
+     * @param keyId Ключ сообщения, например в кафку.
+     * @param payload Тело сообщения.
+     * @param headers Заголовки сообщения.
+     */
+    public void savePrebuiltEvent(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
+        saveAndEnqueue(eventType, keyId, payload, headers);
+    }
+
+    private void saveAndEnqueue(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
+        var event = outboxRepository.save(eventType, keyId, payload, headers, OutboxStatus.NEW);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override
             public void afterCommit() {
                 if (event != null) {
-                    var enqueued = outboxMemoryQueue.offer(event);
-                    if (!enqueued) {
-                        log.warn("Outbox memory queue is FULL! Event #{} left for recovery worker.", event.id());
+                    try {
+                        boolean enqueued = outboxMemoryQueue.offer(event, 250, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        if (!enqueued) {
+                            log.warn("Outbox memory queue is FULL! Event #{} left for recovery worker.", event.id());
+                        }
+                    } catch (InterruptedException e) {
+                        Thread.currentThread().interrupt();
+                        log.error("Thread interrupted while attempting to insert Event #{} into the queue.", event.id(), e);
                     }
                 }
             }
