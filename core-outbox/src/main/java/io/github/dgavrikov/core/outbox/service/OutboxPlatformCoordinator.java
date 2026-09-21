@@ -39,10 +39,13 @@ public class OutboxPlatformCoordinator {
     }
 
     /**
-     * Сценарий 1: Фабричный метод для Application-слоя (Оркестрация).
-     * Позволяет достать строго типизированный плагин наружу, чтобы собрать payload
-     * за рамками или внутри транзакции, подтянув любые связанные сущности.
-     * @param eventType Тип события.
+     * Scenario 1: Factory method for the Application layer (Orchestration).
+     * Provides access to a strictly typed plugin, enabling payload assembly
+     * either inside or outside a transaction by fetching any related entities.
+     *
+     * @param eventType the type of the event
+     * @param <T>       the type of the business context object
+     * @return the strictly typed payload plugin
      */
     @SuppressWarnings("unchecked")
     public <T> OutboxPayloadPlugin<T> getPlugin(OutboxEventType eventType) {
@@ -54,10 +57,13 @@ public class OutboxPlatformCoordinator {
     }
 
     /**
-     * Сценарий 2: Прямое сквозное сохранение.
-     * Принимает строго типизированный контекст T, сам извлекает keyId, payload и headers через плагин.
-     * @param eventType Тип события.
-     * @param <T>
+     * Scenario 2: Direct transparent persistence.
+     * Accepts a strictly typed business context object, automatically extracting
+     * the keyId, payload, and transport headers via the corresponding plugin.
+     *
+     * @param eventType the type of the event
+     * @param context   the business context object containing data to be published
+     * @param <T>       the type of the business context object
      */
     public <T> void saveEvent(OutboxEventType eventType, T context) {
         OutboxPayloadPlugin<T> plugin = getPlugin(eventType);
@@ -70,18 +76,24 @@ public class OutboxPlatformCoordinator {
     }
 
     /**
-     * Сценарий 3: Сохранение предсобранного ивента.
-     * Используется, когда Application-слой сам вызвал плагин, сделал сложный маппинг,
-     * и хочет просто зафиксировать отправку в БД без привязки к конкретной бизнес-сущности.
-     * @param eventType Тип события.
-     * @param keyId Ключ сообщения, например в кафку.
-     * @param payload Тело сообщения.
-     * @param headers Заголовки сообщения.
+     * Scenario 3: Persistence of a pre-built event.
+     * Used when the Application layer orchestrates the process externally, invokes
+     * the plugin, performs complex mapping, and records the outbox event
+     * without binding to a specific business entity lifecycle.
+     *
+     * @param eventType the type of the event
+     * @param keyId     the partition key id used for routing (e.g., Kafka key)
+     * @param payload   the pre-serialized event body (typically JSON)
+     * @param headers   the metadata/transport headers map
      */
     public void savePrebuiltEvent(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
         saveAndEnqueue(eventType, keyId, payload, headers);
     }
 
+    /**
+     * Saves the event to the database within the current ACID transaction
+     * and schedules its in-memory queue push strictly after successful commit.
+     */
     private void saveAndEnqueue(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
         var event = outboxRepository.save(eventType, keyId, payload, headers, OutboxStatus.NEW);
 
