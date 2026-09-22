@@ -11,6 +11,7 @@ import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 import java.util.Set;
 
@@ -81,33 +82,26 @@ public class StateMachineEngine<ID, S extends SmState> {
                     throw new SmInvalidStateException("Handler " + step.eventHandler().getName() + "did not set the completion signal.");
                 }
 
-                switch (signal) {
-                    case SUCCESS, SKIP -> {
-                        var nextState = step.getTransmission(signal);
-                        if (nextState == null)
-                            throw new SmStateTransmissionNotSupportException(
-                                    "No transition found for signal " + signal + " at step " + currentState);
+                var nextState = step.getTransmission(signal);
 
-                        storageAdapter.changeState(contextData, nextState, null, true);
-                    }
-                    case SEND -> {
-                        var nextStatus = step.getTransmission(ExecutionSignal.SEND);
-                        storageAdapter.changeState(contextData, nextStatus, null, false);
+                switch (signal) {
+                    case SUCCESS, SKIP, SEND -> {
+                        checkTransmission(nextState, signal, currentState);
+                        storageAdapter.changeState(contextData, nextState, null);
                     }
                     case DEFER -> {
-                        storageAdapter.changeDeferTime(contextData, runtimeCtx.getDeferUntil());
+                        checkTransmission(nextState, signal, currentState);
+                        storageAdapter.changeDeferTime(contextData, nextState, runtimeCtx.getDeferUntil());
                     }
-                    case RETRY -> {
+                    case RETRY ->
                         storageAdapter.incrementRetryCount(contextData);
-                    }
                     case FAIL -> {
-                        var failStatus = step.getTransmission(ExecutionSignal.FAIL);
-                        storageAdapter.changeState(contextData, failStatus, runtimeCtx.getFailReason(), false);
+                        checkTransmission(nextState, signal, currentState);
+                        storageAdapter.changeState(contextData, nextState, runtimeCtx.getFailReason());
                         hasError = true;
                         incrementMeterCounter(SmMeterCounters.SIGNAL_FAIL);
                     }
                     case STOP -> {
-
                     }
                 }
 
@@ -128,8 +122,8 @@ public class StateMachineEngine<ID, S extends SmState> {
 
             storageAdapter.changeState(contextData,
                     errorState,
-                    "Engine Crash: " + e.getLocalizedMessage(),
-                    false);
+                    "Engine Crash: " + e.getLocalizedMessage()
+            );
             incrementMeterCounter(SmMeterCounters.ENGINE_CRASH);
         } finally {
             scope.close();
@@ -137,6 +131,12 @@ public class StateMachineEngine<ID, S extends SmState> {
         }
 
         return !hasError;
+    }
+
+    private void checkTransmission(@Nullable S nextState, @NotNull ExecutionSignal signal, @NotNull S currentState){
+        if (nextState == null)
+            throw new SmStateTransmissionNotSupportException(
+                    "No transition found for signal " + signal + " at step " + currentState);
     }
 
     private void incrementMeterCounter(@NotNull SmMeterCounters counter) {
