@@ -65,14 +65,14 @@ public class OutboxPlatformCoordinator {
      * @param context   the business context object containing data to be published
      * @param <T>       the type of the business context object
      */
-    public <T> void saveEvent(OutboxEventType eventType, T context) {
+    public <T> OutboxEvent saveEvent(OutboxEventType eventType, T context) {
         OutboxPayloadPlugin<T> plugin = getPlugin(eventType);
 
         String keyId = plugin.extractKeyId(context);
         String payload = plugin.createPayload(context);
         Map<String, String> headers = plugin.createHeaders(context);
 
-        saveAndEnqueue(eventType, keyId, payload, headers);
+        return saveAndEnqueue(eventType, keyId, payload, headers);
     }
 
     /**
@@ -86,15 +86,15 @@ public class OutboxPlatformCoordinator {
      * @param payload   the pre-serialized event body (typically JSON)
      * @param headers   the metadata/transport headers map
      */
-    public void savePrebuiltEvent(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
-        saveAndEnqueue(eventType, keyId, payload, headers);
+    public OutboxEvent savePrebuiltEvent(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
+        return saveAndEnqueue(eventType, keyId, payload, headers);
     }
 
     /**
      * Saves the event to the database within the current ACID transaction
      * and schedules its in-memory queue push strictly after successful commit.
      */
-    private void saveAndEnqueue(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
+    private OutboxEvent saveAndEnqueue(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers) {
         var event = outboxRepository.save(eventType, keyId, payload, headers, OutboxStatus.NEW);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
@@ -113,5 +113,6 @@ public class OutboxPlatformCoordinator {
                 }
             }
         });
+        return event;
     }
 }

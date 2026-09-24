@@ -28,21 +28,23 @@ public interface OutboxPayloadPlugin<T> {
     String createPayload(T sourceData);
 
     /**
-     * Extracts the routing or partition key from the business context.
-     * This key is critical for maintaining strict FIFO guarantees in partition-based brokers like Kafka.
-     *
-     * @param sourceData the business context instance
-     * @return the non-null string routing key identifier
-     */
-    String extractKeyId(T sourceData);
-
-    /**
      * Physical transport dispatcher. Executes the low-level delivery logic to the message broker or remote API.
      * Must be designed to handle transport-specific exceptions gracefully without dropping the batch thread execution.
      *
      * @param outboxEvent the completely populated outbox event log entry retrieved from the pipeline
      */
     void sendEvent(OutboxEvent outboxEvent);
+
+    /**
+     * Extracts the routing or partition key from the business context.
+     * This key is critical for maintaining strict FIFO guarantees in partition-based brokers like Kafka.
+     *
+     * @param sourceData the business context instance
+     * @return the non-null string routing key identifier
+     */
+    default String extractKeyId(T sourceData) {
+        return null;
+    }
 
     /**
      * Assembles transport-level metadata headers from the business context.
