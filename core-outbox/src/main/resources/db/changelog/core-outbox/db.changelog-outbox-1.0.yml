@@ -22,7 +22,7 @@ databaseChangeLog:
                     nullable: false
               - column:
                   name: key_id
-                  type: VARCHAR(50)
+                  type: VARCHAR(128)
                   constraints:
                     nullable: false
               - column:
