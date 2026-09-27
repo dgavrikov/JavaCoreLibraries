@@ -16,10 +16,7 @@ path (event publishing) and heavy background database tasks (recovery/purge). Da
 block broker event ingestion.
 2. **Backpressure Guard:** Automated database protection. If the in-memory queue utilization exceeds 50%, the background 
 polling worker (Recovery) yields execution cycles, eliminating parasitic database overhead during high load.
-3. **Lock-Free Rate Limiting:** High-throughput throttling mapped per recipient group. Implemented via atomic clocks 
-(AtomicLong) and native-compliant thread parking (LockSupport.parkNanos). Scales efficiently across millions of virtual 
-threads without blocking core carrier operating system threads.
-4. **Split-Batching Update:** Network round-trip minimization. Successful execution statuses are updated via a single 
+3. **Split-Batching Update:** Network round-trip minimization. Successful execution statuses are updated via a single 
 batch `WHERE id IN (:ids)` query, reducing network and disk I/O strain up to 50x.
 
 ---

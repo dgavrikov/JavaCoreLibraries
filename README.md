@@ -42,7 +42,9 @@ Provides foundational functionality for logging, metrics monitoring, distributed
 * Serialization and deserialization utilities with built-in compression.
 * Performance-optimized string manipulation utilities.
 * Virtual-thread-ready task scheduler configurator.
-
+* **Lock-Free Rate Limiting:** High-throughput throttling mapped per recipient group. Implemented via atomic clocks
+  (AtomicLong) and native-compliant thread parking (LockSupport.parkNanos). Scales efficiently across millions of virtual
+  threads without blocking core carrier operating system threads.
 ### Quick Start
 
 1. Add the dependency to your `pom.xml`:

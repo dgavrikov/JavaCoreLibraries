@@ -28,7 +28,7 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
     private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
     private final Map<String, OutboxPayloadPlugin<?>> factoryRegistry;
     // GroupID -> Лимитер
-    private final Map<String, VirtualThreadRateLimiter> limitersRegistry = new ConcurrentHashMap<>();
+    private final Map<String, io.github.dgavrikov.core.service.VirtualThreadRateLimiter> limitersRegistry = new ConcurrentHashMap<>();
     private final TaskScheduler outboxScheduler;
     private final OutboxProperties outboxProperties;
     private final OutboxRepository outboxRepository;
@@ -56,7 +56,7 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
             if (plugin.getTpsLimit() > 0) {
                 limitersRegistry.computeIfAbsent(
                         plugin.getRateLimitGroupId(),
-                        groupId -> new VirtualThreadRateLimiter(plugin.getTpsLimit())
+                        groupId -> new io.github.dgavrikov.core.service.VirtualThreadRateLimiter(plugin.getTpsLimit())
                 );
             }
         });

@@ -1,4 +1,4 @@
-package io.github.dgavrikov.core.outbox.service;
+package io.github.dgavrikov.core.service;
 
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.LockSupport;

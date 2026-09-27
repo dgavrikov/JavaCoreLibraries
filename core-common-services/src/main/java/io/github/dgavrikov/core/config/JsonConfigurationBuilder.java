@@ -1,4 +1,4 @@
-package io.github.dgavrikov.core.utils;
+package io.github.dgavrikov.core.config;
 
 import com.fasterxml.jackson.annotation.JsonAutoDetect;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -7,15 +7,15 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
-public class JsonBuilder {
+public class JsonConfigurationBuilder {
     private final JavaTimeModule javaTimeModule = new JavaTimeModule();
 
-    public <T> JsonBuilder addTimeDeserializer(Class<T> clazz, JsonDeserializer<T> deserializer) {
+    public <T> JsonConfigurationBuilder addTimeDeserializer(Class<T> clazz, JsonDeserializer<T> deserializer) {
         javaTimeModule.addDeserializer(clazz, deserializer);
         return this;
     }
 
-    public <T> JsonBuilder addTimeSerializer(Class<T> clazz, JsonSerializer<T> serializer){
+    public <T> JsonConfigurationBuilder addTimeSerializer(Class<T> clazz, JsonSerializer<T> serializer){
         javaTimeModule.addSerializer(clazz, serializer);
         return this;
     }
