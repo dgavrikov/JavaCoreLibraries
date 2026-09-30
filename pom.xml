@@ -26,6 +26,7 @@
         <module>core-uap-security-web</module>
         <module>core-state-machine</module>
         <module>core-outbox</module>
+        <module>core-artemis</module>
     </modules>
 
     <properties>
