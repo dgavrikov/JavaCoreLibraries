@@ -103,12 +103,8 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.env.Environment;
 import org.springframework.scheduling.TaskScheduler;
-import org.springframework.scheduling.annotation.EnableAsync;
-import org.springframework.scheduling.annotation.EnableScheduling;
 
-@EnableAsync
 @Configuration
-@EnableScheduling
 @Slf4j
 @RequiredArgsConstructor
 public class SchedulerConfig {
@@ -152,7 +148,7 @@ import org.springframework.stereotype.Service;
 @Service
 @Slf4j
 @RequiredArgsConstructor
-public class MetricScheduler {
+public class MetricScheduler implements ApplicationListener<ApplicationReadyEvent> {
 
    @Qualifier("metricScheduler")
    private final TaskScheduler metricScheduler;
@@ -160,8 +156,8 @@ public class MetricScheduler {
    // @Value("${...}")
    private String cron = "*/15 * * * * *";
 
-   @PostConstruct
-   void init(){
+   @Override
+   public void onApplicationEvent(@NonNull ApplicationReadyEvent event) {
       var cronTrigger = new CronTrigger(cron);
       metricScheduler.schedule(this::process, cronTrigger);
    }
