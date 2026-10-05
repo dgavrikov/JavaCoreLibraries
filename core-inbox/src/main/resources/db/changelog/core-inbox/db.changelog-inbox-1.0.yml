@@ -1,0 +1,81 @@
+databaseChangeLog:
+  - changeSet:
+      id: core-inbox-create-messages-table-v1
+      author: d.gavrikov
+      comment: Create unified system table for Transactional Inbox with high-load partial indexes
+      changes:
+        - createTable:
+            tableName: inbox_messages
+            columns:
+              - column:
+                  name: message_id
+                  type: VARCHAR(64)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: VARCHAR(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payload
+                  type: JSONB
+                  constraints:
+                    nullable: false
+              - column:
+                  name: headers
+                  type: JSONB
+                  constraints:
+                    nullable: true
+              - column:
+                  name: status
+                  type: VARCHAR(64)
+                  defaultValue: "NEW"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: retry_count
+                  type: INT
+                  defaultValue: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reason
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true
+              - column:
+                  name: next_execution_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: TIMESTAMP WITH TIME ZONE
+                  defaultValueComputed: NOW()
+                  constraints:
+                    nullable: false
+        - createIndex:
+            indexName: idx_inbox_unprocessed
+            tableName: inbox_messages
+            columns:
+              - column:
+                  name: next_execution_at
+              - column:
+                  name: message_id
+            where: "status IN ('NEW', 'FAILED')"
+        - createIndex:
+            indexName: idx_inbox_purge_historical
+            tableName: inbox_messages
+            columns:
+              - column:
+                  name: updated_at
+            where: "status = 'PROCESSED'"

@@ -26,6 +26,7 @@
         <module>core-uap-security-web</module>
         <module>core-state-machine</module>
         <module>core-outbox</module>
+        <module>core-inbox</module>
     </modules>
 
     <properties>
@@ -81,6 +82,11 @@
             <dependency>
                 <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-database-postgresql</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dgavrikov</groupId>
+                <artifactId>core-inbox</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
