@@ -38,7 +38,7 @@ public class OutboxAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "outboxMemoryQueue")
-    public BlockingQueue<OutboxEvent> outboxMemoryQueue(){
+    public BlockingQueue<OutboxEvent> outboxMemoryQueue() {
         return new ArrayBlockingQueue<>(outboxProperties.inMemoryQueue().capacity());
     }
 
@@ -66,7 +66,7 @@ public class OutboxAutoConfiguration {
     public OutboxRepository outboxRepository(
             NamedParameterJdbcTemplate namedParameterJdbcTemplate,
             ObjectMapper objectMapper
-    ){
+    ) {
         return new OutboxRepositoryDefault(namedParameterJdbcTemplate, objectMapper);
     }
 
@@ -79,7 +79,11 @@ public class OutboxAutoConfiguration {
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository
     ) {
-        return new OutboxBatchPublisher(outboxPublisherScheduler, outboxMemoryQueue, outboxPayloadPluginCollection, outboxProperties, outboxRepository);
+        return new OutboxBatchPublisher(outboxPublisherScheduler,
+                outboxMemoryQueue,
+                outboxPayloadPluginCollection,
+                outboxProperties,
+                outboxRepository);
     }
 
     @Bean
@@ -90,7 +94,10 @@ public class OutboxAutoConfiguration {
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository
     ) {
-        return new OutboxMaintenanceWorker(outboxMemoryQueue, outboxMaintenanceScheduler, outboxProperties, outboxRepository);
+        return new OutboxMaintenanceWorker(outboxMemoryQueue,
+                outboxMaintenanceScheduler,
+                outboxProperties,
+                outboxRepository);
     }
 
     @Bean
@@ -99,7 +106,9 @@ public class OutboxAutoConfiguration {
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxRepository outboxRepository
-    ){
-        return new OutboxPlatformCoordinator(outboxMemoryQueue, outboxPayloadPluginCollection, outboxRepository);
+    ) {
+        return new OutboxPlatformCoordinator(outboxMemoryQueue,
+                outboxPayloadPluginCollection,
+                outboxRepository);
     }
 }

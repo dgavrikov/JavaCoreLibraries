@@ -18,7 +18,6 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
-@RequiredArgsConstructor
 @Slf4j
 public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationReadyEvent> {
 
@@ -26,6 +25,18 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
     private final TaskScheduler outboxScheduler;
     private final OutboxProperties outboxProperties;
     private final OutboxRepository outboxRepository;
+    private final int capacityThreshold;
+
+    public OutboxMaintenanceWorker(BlockingQueue<OutboxEvent> outboxMemoryQueue,
+                                   TaskScheduler outboxScheduler,
+                                   OutboxProperties outboxProperties,
+                                   OutboxRepository outboxRepository) {
+        this.outboxMemoryQueue = outboxMemoryQueue;
+        this.outboxScheduler = outboxScheduler;
+        this.outboxProperties = outboxProperties;
+        this.outboxRepository = outboxRepository;
+        this.capacityThreshold = (int) (outboxProperties.inMemoryQueue().capacity() * 0.5);
+    }
 
 
     @Override
@@ -42,11 +53,8 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
         outboxScheduler.schedule(this::purgeSentEvents, cleanupTrigger);
     }
 
-    @Transactional
-    public void recoveryLostEvents() {
-        int halfCapacity = outboxProperties.inMemoryQueue().capacity() / 2;
-
-        if (outboxMemoryQueue.size() > halfCapacity) {
+    private void recoveryLostEvents() {
+        if (outboxMemoryQueue.size() > capacityThreshold) {
             log.debug("Outbox memory queue is heavily loaded (size: {}). Skipping recovery.",
                     outboxMemoryQueue.size());
             return;
@@ -73,7 +81,7 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
         }
     }
 
-    public void purgeSentEvents() {
+    private void purgeSentEvents() {
         log.info("Starting purge of successfully sent outbox events...");
 
         OffsetDateTime retentionBoundary = OffsetDateTime.now()
