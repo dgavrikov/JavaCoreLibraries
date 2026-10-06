@@ -12,9 +12,12 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.core.namedparam.SqlParameterSource;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -28,38 +31,53 @@ public class InboxRepositoryDefault implements InboxRepository {
 
     @Language("SQL")
     private static final String SQL_INSERT = """
-            INSERT INTO inbox_messages (message_id, event_type, payload, headers, status)
-                VALUES (:message_id, :event_type, :payload::jsonb, :headers::jsonb, 'NEW')
+            INSERT INTO inbox_events (message_id, event_type, payload, headers, status)
+                VALUES (:messageId, :eventType, :payload::jsonb, :headers::jsonb, 'PROCESSING')
                 ON CONFLICT (message_id) DO NOTHING;
             """;
 
     @Language("SQL")
     private static final String SQL_FETCH_RECOVERY = """
-            UPDATE inbox_messages
-            SET status = 'PROCESSING', updated_at = NOW()
+            UPDATE inbox_events
+            SET updated_at = NOW()
             WHERE message_id IN (
-                SELECT message_id FROM inbox_messages
-                WHERE status IN ('NEW', 'FAILED')
-                  AND next_execution_at <= NOW() - CAST(:time_depth || ' second' AS INTERVAL)
+                SELECT message_id FROM (
+                    SELECT message_id, next_execution_at FROM inbox_events
+                    WHERE status = 'PROCESSING' AND updated_at <= :timeBoundary
+            
+                    UNION ALL
+            
+                    SELECT message_id, next_execution_at FROM inbox_events
+                    WHERE status = 'FAILED' AND next_execution_at <= NOW()
+                ) h
                 ORDER BY next_execution_at ASC
                 FOR UPDATE SKIP LOCKED
-                LIMIT :batch_size
+                LIMIT :batchSize
             )
             RETURNING message_id, event_type, payload, headers;
             """;
 
     @Language("SQL")
     private static final String SQL_PURGE_PROCESSED = """
-            DELETE FROM inbox_messages
-            WHERE message_id IN (
-                SELECT message_id FROM inbox_messages
-                WHERE status = 'PROCESSED' AND updated_at < NOW() - CAST(:hours || ' hour' AS INTERVAL)
-                LIMIT :batch_size
+            WITH rows_to_delete as (
+                SELECT ie.id
+                FROM inbox_events ie
+                WHERE ie.status = 'PROCESSED' AND ie.updated_at < :retentionBoundary
+                LIMIT :batchSize
+                FOR NO KEY UPDATE SKIP LOCKED
+            ),
+            deleted_rows AS (
+                    DELETE FROM inbox_events ie
+                    USING rows_to_delete_ rtd
+                    WHERE rtd.id = ie.id
+                    RETURNING ie.id
             )
+            SELECT count(*) from deleted_rows
             """;
 
+    @Language("SQL")
     private static final String SQL_UPDATE_STATUS = """
-            UPDATE inbox_messages
+            UPDATE inbox_events
             SET status = :status,
                 reason = :reason,
                 updated_at = NOW(),
@@ -72,13 +90,13 @@ public class InboxRepositoryDefault implements InboxRepository {
     private final ObjectMapper objectMapper;
 
     @Override
-    public boolean saveStrictly(InboxEvent event) {
+    public boolean save(InboxEvent event) {
         try {
             String jsonHeaders = objectMapper.writeValueAsString(event.headers());
 
             SqlParameterSource params = new MapSqlParameterSource()
-                    .addValue("message_id", event.messageId())
-                    .addValue("event_type", event.eventType().asString())
+                    .addValue("messageId", event.messageId())
+                    .addValue("eventType", event.eventType().asString())
                     .addValue("payload", event.payload())
                     .addValue("headers", jsonHeaders);
 
@@ -92,12 +110,10 @@ public class InboxRepositoryDefault implements InboxRepository {
     }
 
     @Override
-    public List<InboxEvent> fetchBatchForRecovery(int batchSize, long timeDepthSec) {
-
-
+    public List<InboxEvent> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize) {
         SqlParameterSource params = new MapSqlParameterSource()
-                .addValue("time_depth", timeDepthSec)
-                .addValue("batch_size", batchSize);
+                .addValue("timeBoundary", timeBoundary)
+                .addValue("batchSize", batchSize);
 
         return jdbcTemplate.query(SQL_FETCH_RECOVERY, params, this::mapRowToEvent);
     }
@@ -115,11 +131,13 @@ public class InboxRepositoryDefault implements InboxRepository {
     }
 
     @Override
-    public void purgeProcessed(int hoursDepth, int batchSize) {
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public long purgeProcessed(OffsetDateTime retentionBoundary, int batchSize) {
         SqlParameterSource params = new MapSqlParameterSource()
-                .addValue("hours", hoursDepth)
-                .addValue("batch_size", batchSize);
-        jdbcTemplate.update(SQL_PURGE_PROCESSED, params);
+                .addValue("retentionBoundary", retentionBoundary)
+                .addValue("batchSize", batchSize);
+        Long deletedCount = jdbcTemplate.queryForObject(SQL_PURGE_PROCESSED, params, Long.class);
+        return deletedCount != null ? deletedCount : 0L;
     }
 
     private InboxEvent mapRowToEvent(ResultSet rs, int rowNum) throws SQLException {

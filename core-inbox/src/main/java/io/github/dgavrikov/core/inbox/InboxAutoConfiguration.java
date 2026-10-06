@@ -75,7 +75,12 @@ public class InboxAutoConfiguration {
             InboxProperties properties,
             InboxRepository repository
     ) {
-        return new InboxBatchProcessor(inboxWorkerScheduler, inboxMemoryQueue, plugins, properties, repository);
+        return new InboxBatchProcessor(
+                inboxWorkerScheduler,
+                inboxMemoryQueue,
+                plugins,
+                properties,
+                repository);
     }
 
     @Bean
@@ -86,7 +91,11 @@ public class InboxAutoConfiguration {
             InboxProperties properties,
             InboxRepository repository
     ) {
-        return new InboxMaintenanceWorker(inboxMemoryQueue, inboxMaintenanceScheduler, properties, repository);
+        return new InboxMaintenanceWorker(
+                inboxMemoryQueue,
+                inboxMaintenanceScheduler,
+                properties,
+                repository);
     }
 
     @Bean

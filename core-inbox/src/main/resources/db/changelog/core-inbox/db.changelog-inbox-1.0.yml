@@ -5,7 +5,7 @@ databaseChangeLog:
       comment: Create unified system table for Transactional Inbox with high-load partial indexes
       changes:
         - createTable:
-            tableName: inbox_messages
+            tableName: inbox_events
             columns:
               - column:
                   name: message_id
@@ -31,7 +31,7 @@ databaseChangeLog:
               - column:
                   name: status
                   type: VARCHAR(64)
-                  defaultValue: "NEW"
+                  defaultValue: "PROCESSING"
                   constraints:
                     nullable: false
               - column:
@@ -64,17 +64,24 @@ databaseChangeLog:
                   constraints:
                     nullable: false
         - createIndex:
-            indexName: idx_inbox_unprocessed
-            tableName: inbox_messages
+            indexName: idx_inbox_recovery_processing
+            tableName: inbox_events
+            columns:
+              - column:
+                  name: updated_at
+              - column:
+                  name: next_execution_at
+            where: "status = 'PROCESSING'"
+        - createIndex:
+            indexName: idx_inbox_recovery_failed
+            tableName: inbox_events
             columns:
               - column:
                   name: next_execution_at
-              - column:
-                  name: message_id
-            where: "status IN ('NEW', 'FAILED')"
+            where: "status = 'FAILED'"
         - createIndex:
             indexName: idx_inbox_purge_historical
-            tableName: inbox_messages
+            tableName: inbox_events
             columns:
               - column:
                   name: updated_at

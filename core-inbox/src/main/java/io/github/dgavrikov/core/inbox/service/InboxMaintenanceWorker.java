@@ -1,44 +1,52 @@
 package io.github.dgavrikov.core.inbox.service;
 
 import io.github.dgavrikov.core.inbox.model.InboxEvent;
+import io.github.dgavrikov.core.inbox.model.InboxStatus;
 import io.github.dgavrikov.core.inbox.properties.InboxProperties;
 import io.github.dgavrikov.core.inbox.repository.InboxRepository;
 import lombok.extern.slf4j.Slf4j;
+import org.jetbrains.annotations.NotNull;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.ApplicationListener;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.support.CronTrigger;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
 
 @Slf4j
-public class InboxMaintenanceWorker {
+public class InboxMaintenanceWorker implements ApplicationListener<ApplicationReadyEvent> {
     private final BlockingQueue<InboxEvent> inboxMemoryQueue;
-    private final InboxProperties properties;
-    private final InboxRepository repository;
+    private final InboxProperties inboxProperties;
+    private final InboxRepository inboxRepository;
+    private final TaskScheduler taskScheduler;
     private final int capacityThreshold;
 
     public InboxMaintenanceWorker(
             BlockingQueue<InboxEvent> inboxMemoryQueue,
             TaskScheduler scheduler,
-            InboxProperties properties,
-            InboxRepository repository
+            InboxProperties inboxProperties,
+            InboxRepository inboxRepository
     ) {
         this.inboxMemoryQueue = inboxMemoryQueue;
-        this.properties = properties;
-        this.repository = repository;
-        this.capacityThreshold = (int) (properties.inMemoryQueue().capacity() * 0.5); // 50% порог Backpressure Guard
+        this.inboxProperties = inboxProperties;
+        this.inboxRepository = inboxRepository;
+        this.taskScheduler = scheduler;
+        this.capacityThreshold = (int) (inboxProperties.inMemoryQueue().capacity() * 0.5);
+    }
 
-        // Планировщик восстановления хвостов (Recovery Engine)
-        scheduler.scheduleWithFixedDelay(this::runRecovery,
-                Duration.ofMillis(properties.recoveryProps().recoveryIntervalDelayMs()));
+    @Override
+    public void onApplicationEvent(@NotNull ApplicationReadyEvent event) {
+        taskScheduler.scheduleWithFixedDelay(this::runRecovery,
+                Duration.ofMillis(inboxProperties.recoveryProps().recoveryIntervalDelayMs()));
 
-        // Планировщик очистки старых записей (Purge Engine)
-        scheduler.schedule(this::runCleanup, new CronTrigger(properties.cleanupProps().cronExpression()));
+        taskScheduler.schedule(this::runCleanup, new CronTrigger(inboxProperties.cleanupProps().cronExpression()));
     }
 
     private void runRecovery() {
-        // Backpressure Guard: защищаем память и снижаем паразитную нагрузку на БД
         if (inboxMemoryQueue.size() > capacityThreshold) {
             log.debug("Recovery engine skipped. Memory queue usage over 50%. Current size: {}", inboxMemoryQueue.size());
             return;
@@ -46,25 +54,43 @@ public class InboxMaintenanceWorker {
 
         log.debug("Starting distributed database recovery sweep via FOR UPDATE SKIP LOCKED...");
 
-        List<InboxEvent> recoveredEvents = repository.fetchBatchForRecovery(
-                properties.recoveryProps().batchSize(),
-                properties.recoveryProps().timeDepthSec()
+        OffsetDateTime timeBoundary = OffsetDateTime.now()
+                .minusSeconds(inboxProperties.recoveryProps().timeDepthSec());
+
+        List<InboxEvent> recoveredEvents = inboxRepository.fetchBatchForRecovery(
+                timeBoundary,
+                inboxProperties.recoveryProps().batchSize()
         );
 
         for (InboxEvent event : recoveredEvents) {
             boolean offered = inboxMemoryQueue.offer(event);
             if (!offered) {
-                // Если память внезапно забилась во время вычитки, откатываем статус обратно в NEW одной операцией
-                repository.changeStatusInBatch(List.of(event.messageId()), io.github.dgavrikov.core.inbox.model.InboxStatus.NEW, "Queue overflow during recovery");
+                log.warn("Queue capacity limit reached during recovery. Event {} left in DB for next sweep.", event.messageId());
+                break;
             }
         }
     }
 
-    private void runCleanup() {
+    public void runCleanup() {
         log.info("Starting historical inbox logs cleanup...");
-        repository.purgeProcessed(
-                properties.cleanupProps().depthInHour(),
-                properties.cleanupProps().batchSize()
-        );
+
+        OffsetDateTime retentionBoundary = OffsetDateTime.now()
+                .minusHours(inboxProperties.cleanupProps().depthInHour());
+
+        long deletedRows = 0L;
+        try {
+            while (true) {
+                var delete = inboxRepository.purgeProcessed(retentionBoundary,
+                        inboxProperties.cleanupProps().batchSize());
+                deletedRows += delete;
+
+                if (delete == 0)
+                    break;
+            }
+        } catch (Exception e) {
+            log.error("Error on cleanup historical process inbox.", e);
+        }
+        log.info("Inbox table purged. Deleted {} historical processed events.", deletedRows);
     }
+
 }
