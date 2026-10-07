@@ -65,108 +65,11 @@ io:
 
 It is recommended to include this script into your primary `db.changelog-master.yaml` using the native `include` element. Database indexes utilize PostgreSQL Partial Indexes tailored for the `UNION ALL` recovery-engine strategy to prevent sequential scan performance issues at scale, while `message_id` serves as the primary key for deduplication.
 
-```yaml
-databaseChangeLog:
-  - changeSet:
-      id: core-inbox-create-messages-table-v2
-      author: d.gavrikov
-      comment: Create unified system table for Transactional Inbox with high-load partial indexes
-      changes:
-        - createTable:
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: message_id
-                  type: VARCHAR(64)
-                  constraints:
-                    primaryKey: true
-                    nullable: false
-              - column:
-                  name: event_type
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: payload
-                  type: JSONB
-                  constraints:
-                    nullable: false
-              - column:
-                  name: headers
-                  type: JSONB
-                  constraints:
-                    nullable: true
-              - column:
-                  name: status
-                  type: VARCHAR(64)
-                  defaultValue: "PROCESSING"
-                  constraints:
-                    nullable: false
-              - column:
-                  name: retry_count
-                  type: INT
-                  defaultValue: 0
-                  constraints:
-                    nullable: false
-              - column:
-                  name: reason
-                  type: VARCHAR(1000)
-                  constraints:
-                    nullable: true
-              - column:
-                  name: next_execution_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-              - column:
-                  name: updated_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-
-        # Index 1: Designed for lightning-fast scanning of stale inboxes (Zero DB Read Recovery path)
-        - createIndex:
-            indexName: idx_inbox_recovery_processing
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: updated_at
-              - column:
-                  name: next_execution_at
-            where: "status = 'PROCESSING'"
-
-        # Index 2: Optimized for polling failed events managed by exponential backoff scheduling
-        - createIndex:
-            indexName: idx_inbox_recovery_failed
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: next_execution_at
-            where: "status = 'FAILED'"
-
-        # Index 3: Highly efficient partial index for batched purging of historical processed logs
-        - createIndex:
-            indexName: idx_inbox_purge_historical
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: updated_at
-            where: "status = 'PROCESSED'"
-```
-
 ---
 
 ## Extension Point Implementation Example (InboxPayloadPlugin)
 
-Implement this interface within your application or domain layer to handle incoming event deserialization and execute pure business logic. The `process` method execution is decoupled from transport runtimes and runs seamlessly on **Java 21 Virtual Threads** with no Spring AOP proxy overhead.
+Implement this interface within your application or domain layer to handle incoming event validation and execute pure business logic. The `process` method execution is decoupled from transport runtimes and runs seamlessly on **Java 21 Virtual Threads** with no Spring AOP proxy overhead, accepting a fully prepared, strongly-typed domain context embedded inside the event record.
 
 ```java
 package io.github.dgavrikov.examples.inbox;
@@ -177,6 +80,7 @@ import io.github.dgavrikov.core.inbox.model.InboxEventType;
 import io.github.dgavrikov.core.inbox.model.InboxPayloadPlugin;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -191,18 +95,27 @@ public class AccountCreatedInboxPlugin implements InboxPayloadPlugin<AccountDto>
     }
 
     @Override
-    public AccountDto deserialize(String rawPayload) {
+    public Optional<AccountDto> validate(String rawPayload) {
         try {
-            return objectMapper.readValue(rawPayload, AccountDto.class);
+            // Combines deserialization and structural business validation at the entry point
+            AccountDto dto = objectMapper.readValue(rawPayload, AccountDto.class);
+            
+            if (dto.getNumber() == null || dto.getNumber().isBlank()) {
+                return Optional.empty(); // Safeguard against malformed business data
+            }
+            
+            return Optional.of(dto);
         } catch (Exception e) {
-            throw new RuntimeException("Inbox payload de-serialization error", e);
+            // Any syntax failure (Poison Pill) is safely intercepted before hitting the database
+            return Optional.empty();
         }
     }
 
     @Override
-    public void process(InboxEvent event, AccountDto domainContext) throws Exception {
-        // Core domain business logic execution within an isolated Virtual Thread runtime
-        accountService.handleAccountCreation(domainContext);
+    public void process(InboxEvent<AccountDto> event) throws Exception {
+        // Core domain business logic execution within an isolated Virtual Thread runtime.
+        // The domain context is pre-extracted and available natively via the immutable record.
+        accountService.handleAccountCreation(event.domainContext());
     }
 
     @Override
@@ -221,20 +134,17 @@ public class AccountCreatedInboxPlugin implements InboxPayloadPlugin<AccountDto>
 
 ## Transport Ingestion Layer Integration Example (Kafka Consumer)
 
-Initial message registration and immediate database-level idempotency checks execute through the `InboxPlatformCoordinator` safely within active transaction boundary limits. The engine delegates the event to the low-latency processing in-memory queue via `TransactionSynchronization.afterCommit()`, completely mitigating phantom data processing and event drop risks if a pod crashes.
+Initial message registration, validation, and immediate database-level idempotency checks execute seamlessly through the `InboxPlatformCoordinator` acting as a single platform facade. The consumer layer is entirely isolated from internal processing mechanics, serialization internals, or registry management. The engine guarantees a low-latency in-memory push via `TransactionSynchronization.afterCommit()`, completely mitigating phantom processing risks.
 
 ```java
 package io.github.dgavrikov.examples.listener;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.dgavrikov.core.inbox.model.InboxEvent;
 import io.github.dgavrikov.core.inbox.service.InboxPlatformCoordinator;
 import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.Map;
 
 @Component
@@ -242,32 +152,25 @@ import java.util.Map;
 public class AccountKafkaConsumer {
 
     private final InboxPlatformCoordinator inboxCoordinator;
-    private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = "account-events-topic", groupId = "core-inbox-account-group")
-    @Transactional // Forces atomic persistence in DB with initial 'PROCESSING' state
+    @Transactional // Forces atomic persistence in DB within the shared transport transaction context
     public void onMessage(ConsumerRecord<String, String> record) {
-        
-        // 1. Build immutable infrastructure InboxEvent
-        InboxEvent inboxEvent = InboxEvent.builder()
-                .messageId(record.key()) // Kafka record key acts as the Primary Key for immediate deduplication
-                .eventType(() -> "ACCOUNT_CREATED")
-                .payload(record.value())
-                .headers(Map.of("partition", String.valueOf(record.partition())))
-                .build();
 
-        // 2. Coordinate persistence and deduplication
-        // The method triggers a native INSERT ... ON CONFLICT DO NOTHING block.
-        // Returns false on duplicates, cutting off redundant execution instantly.
-        // On success, registers TransactionSynchronization.afterCommit() to push into the in-memory queue.
-        boolean isUnique = inboxCoordinator.coordinate(inboxEvent);
-        
-        if (!isUnique) {
-            // Duplicate event detected and safely dropped at DB layer. Domain logic won't be invoked.
+        // Delegate raw wire data to the single platform facade.
+        // All validation, poison pill filtering, and deduplication logic are encapsulated within.
+        boolean accepted = inboxCoordinator.coordinate(
+                record.key(), // Kafka record key acts as the unique messageId for native primary key deduplication
+                "ACCOUNT_CREATED",
+                record.value(),
+                Map.of("partition", String.valueOf(record.partition()))
+        );
+
+        if (!accepted) {
+            // The method returns false gracefully for both duplicates and Poison Pills.
+            // We just exit normally, allowing Kafka to safely commit the partition offset.
             return;
         }
-        
-        // Transaction completes and commits, allowing background workers to safely process on Virtual Threads
     }
 }
 ```

@@ -60,19 +60,19 @@ public class InboxRepositoryDefault implements InboxRepository {
     @Language("SQL")
     private static final String SQL_PURGE_PROCESSED = """
             WITH rows_to_delete as (
-                SELECT ie.id
+                SELECT ie.message_id
                 FROM inbox_events ie
                 WHERE ie.status = 'PROCESSED' AND ie.updated_at < :retentionBoundary
                 LIMIT :batchSize
                 FOR NO KEY UPDATE SKIP LOCKED
             ),
             deleted_rows AS (
-                    DELETE FROM inbox_events ie
-                    USING rows_to_delete_ rtd
-                    WHERE rtd.id = ie.id
-                    RETURNING ie.id
+                DELETE FROM inbox_events ie
+                USING rows_to_delete rtd
+                WHERE rtd.message_id = ie.message_id
+                RETURNING ie.message_id
             )
-            SELECT count(*) from deleted_rows
+            SELECT count(*) from deleted_rows;
             """;
 
     @Language("SQL")
@@ -90,7 +90,7 @@ public class InboxRepositoryDefault implements InboxRepository {
     private final ObjectMapper objectMapper;
 
     @Override
-    public boolean save(InboxEvent event) {
+    public boolean save(InboxEvent<?> event) {
         try {
             String jsonHeaders = objectMapper.writeValueAsString(event.headers());
 
@@ -101,7 +101,7 @@ public class InboxRepositoryDefault implements InboxRepository {
                     .addValue("headers", jsonHeaders);
 
             int affected = jdbcTemplate.update(SQL_INSERT, params);
-            return affected > 0; // false означает дедупликацию на входе
+            return affected > 0;
         } catch (DuplicateKeyException e) {
             return false;
         } catch (JsonProcessingException e) {
@@ -110,7 +110,7 @@ public class InboxRepositoryDefault implements InboxRepository {
     }
 
     @Override
-    public List<InboxEvent> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize) {
+    public List<InboxEvent<?>> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize) {
         SqlParameterSource params = new MapSqlParameterSource()
                 .addValue("timeBoundary", timeBoundary)
                 .addValue("batchSize", batchSize);
@@ -140,17 +140,17 @@ public class InboxRepositoryDefault implements InboxRepository {
         return deletedCount != null ? deletedCount : 0L;
     }
 
-    private InboxEvent mapRowToEvent(ResultSet rs, int rowNum) throws SQLException {
+    private InboxEvent<?> mapRowToEvent(ResultSet rs, int rowNum) throws SQLException {
         String typeStr = rs.getString("event_type");
         InboxEventType eventType = () -> typeStr;
-
         String rawHeaders = rs.getString("headers");
 
         try {
             return InboxEvent.builder()
                     .messageId(rs.getString("message_id"))
                     .eventType(eventType)
-                    .payload(rs.getString("payload"))
+                    .payload(rs.getString("payload")) // Маппим в rawPayload
+                    .domainContext(null) // На этапе вычитки из БД контекста еще нет, его восстановит MaintenanceWorker
                     .headers(objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF))
                     .build();
         } catch (JsonProcessingException e) {

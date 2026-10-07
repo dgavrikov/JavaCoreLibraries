@@ -65,108 +65,11 @@ io:
 
 Рекомендуется подключить этот файл в ваш основной `db.changelog-master.yaml` через механизм `include`. Индексы используют оптимизацию **частичных индексов PostgreSQL (Partial Indexes)** под стратегию `UNION ALL` рекавери-движка, что полностью исключает `Sequential Scan` и деградацию производительности таблицы `inbox_events` при миллионных объемах. Первичным ключом выступает нативный `message_id`, что гарантирует дедупликацию на уровне ограничений СУБД.
 
-```yaml
-databaseChangeLog:
-  - changeSet:
-      id: core-inbox-create-messages-table-v2
-      author: d.gavrikov
-      comment: Create unified system table for Transactional Inbox with high-load partial indexes
-      changes:
-        - createTable:
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: message_id
-                  type: VARCHAR(64)
-                  constraints:
-                    primaryKey: true
-                    nullable: false
-              - column:
-                  name: event_type
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: payload
-                  type: JSONB
-                  constraints:
-                    nullable: false
-              - column:
-                  name: headers
-                  type: JSONB
-                  constraints:
-                    nullable: true
-              - column:
-                  name: status
-                  type: VARCHAR(64)
-                  defaultValue: "PROCESSING"
-                  constraints:
-                    nullable: false
-              - column:
-                  name: retry_count
-                  type: INT
-                  defaultValue: 0
-                  constraints:
-                    nullable: false
-              - column:
-                  name: reason
-                  type: VARCHAR(1000)
-                  constraints:
-                    nullable: true
-              - column:
-                  name: next_execution_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-              - column:
-                  name: updated_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-
-        # Индекс 1: Для моментального поиска зависших в обработке инбоксов (Zero DB Read Recovery)
-        - createIndex:
-            indexName: idx_inbox_recovery_processing
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: updated_at
-              - column:
-                  name: next_execution_at
-            where: "status = 'PROCESSING'"
-
-        # Индекс 2: Для поиска упавших по экспоненциальному бэкаффу
-        - createIndex:
-            indexName: idx_inbox_recovery_failed
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: next_execution_at
-            where: "status = 'FAILED'"
-
-        # Индекс 3: Высокоэффективная партиционированная очистка исторических логов
-        - createIndex:
-            indexName: idx_inbox_purge_historical
-            tableName: inbox_events
-            columns:
-              - column:
-                  name: updated_at
-            where: "status = 'PROCESSED'"
-```
-
 ---
 
 ## Пример реализации точки интеграции (InboxPayloadPlugin)
 
-Реализуйте этот интерфейс в прикладном или доменном слое вашего сервиса для десериализации входящего payload и выполнения чистой бизнес-логики без магии Spring AOP, рефлексии и прокси-оберток. Метод `process` гарантированно исполняется внутри изолированного рантайма на **Java 21 Virtual Threads**.
+Реализуйте этот интерфейс в прикладном или доменном слое вашего сервиса для валидации входящего payload и выполнения чистой бизнес-логики без магии Spring AOP, рефлексии и прокси-оберток. Метод `process` гарантированно исполняется внутри изолированного рантайма на **Java 21 Virtual Threads** и принимает полностью готовый, типизированный контекст.
 
 ```java
 package io.github.dgavrikov.examples.inbox;
@@ -176,7 +79,7 @@ import io.github.dgavrikov.core.inbox.model.InboxEvent;
 import io.github.dgavrikov.core.inbox.model.InboxEventType;
 import io.github.dgavrikov.core.inbox.model.InboxPayloadPlugin;
 import lombok.RequiredArgsConstructor;
-import org.springframework.stereotype.Component;
+import java.util.Optional;
 
 @Component
 @RequiredArgsConstructor
@@ -191,18 +94,27 @@ public class AccountCreatedInboxPlugin implements InboxPayloadPlugin<AccountDto>
     }
 
     @Override
-    public AccountDto deserialize(String rawPayload) {
+    public Optional<AccountDto> validate(String rawPayload) {
         try {
-            return objectMapper.readValue(rawPayload, AccountDto.class);
+            // Совмещаем десериализацию и базовую структурную проверку на самом входе
+            AccountDto dto = objectMapper.readValue(rawPayload, AccountDto.class);
+            
+            if (dto.getNumber() == null || dto.getNumber().isBlank()) {
+                return Optional.empty(); // Защита от бизнес-мусора
+            }
+            
+            return Optional.of(dto);
         } catch (Exception e) {
-            throw new RuntimeException("Inbox payload de-serialization error", e);
+            // Любой синтаксический сбой (Poison Pill) отсекается до похода в базу данных
+            return Optional.empty();
         }
     }
 
     @Override
-    public void process(InboxEvent event, AccountDto domainContext) throws Exception {
-        // Точка выполнения чистой бизнес-логики в изолированном виртуальном потоке
-        accountService.handleAccountCreation(domainContext);
+    public void process(InboxEvent<AccountDto> event) throws Exception {
+        // Точка выполнения чистой бизнес-логики в изолированном виртуальном потоке.
+        // Доменный контекст уже распакован и доступен внутри иммутабельного рекорда.
+        accountService.handleAccountCreation(event.domainContext());
     }
 
     @Override
@@ -226,15 +138,12 @@ public class AccountCreatedInboxPlugin implements InboxPayloadPlugin<AccountDto>
 ```java
 package io.github.dgavrikov.examples.listener;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import io.github.dgavrikov.core.inbox.model.InboxEvent;
 import io.github.dgavrikov.core.inbox.service.InboxPlatformCoordinator;
 import lombok.RequiredArgsConstructor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.springframework.kafka.annotation.KafkaListener;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
-
 import java.util.Map;
 
 @Component
@@ -242,32 +151,27 @@ import java.util.Map;
 public class AccountKafkaConsumer {
 
     private final InboxPlatformCoordinator inboxCoordinator;
-    private final ObjectMapper objectMapper;
 
     @KafkaListener(topics = "account-events-topic", groupId = "core-inbox-account-group")
-    @Transactional // Гарантирует атомарную фиксацию в СУБД со статусом PROCESSING
+    @Transactional // Гарантирует атомарную фиксацию в СУБД внутри общей транзакции
     public void onMessage(ConsumerRecord<String, String> record) {
         
-        // 1. Формируем неизменяемый инфраструктурный InboxEvent
-        InboxEvent inboxEvent = InboxEvent.builder()
-                .messageId(record.key()) // Идентификатор из Кафки — наш Primary Key для дедупликации
-                .eventType(() -> "ACCOUNT_CREATED")
-                .payload(record.value())
-                .headers(Map.of("partition", String.valueOf(record.partition())))
-                .build();
-
-        // 2. Координируем запись.
-        // Метод выполнит нативный INSERT ... ON CONFLICT DO NOTHING.
-        // При дубликате метод вернет false, мгновенно прерывая выполнение.
-        // При успехе — зарегистрирует TransactionSynchronization.afterCommit() для пуша в in-memory очередь.
-        boolean isUnique = inboxCoordinator.coordinate(inboxEvent);
+        // Передаем сырые данные единственному фасаду платформы. 
+        // Вся магия десериализации, валидации и дедупликации скрыта внутри.
+        boolean accepted = inboxCoordinator.coordinate(
+                record.key(), 
+                "ACCOUNT_CREATED", 
+                record.value(), 
+                Map.of("partition", String.valueOf(record.partition()))
+        );
         
-        if (!isUnique) {
-            // Сообщение-дубликат отсечено на уровне СУБД. Никаких повторных вызовов бизнес-логики.
+        if (!accepted) {
+            // Метод вернет false как при дубликате, так и при Poison Pill.
+            // Мы просто мягко выходим из метода, позволяя Кафке закоммитить оффсет.
             return;
         }
-        
-        // Транзакция завершается, коммитится, и воркер асинхронно забирает событие на выполнение в Virtual Threads
     }
 }
+
 ```
+

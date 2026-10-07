@@ -1,5 +1,7 @@
 package io.github.dgavrikov.core.inbox.model;
 
+import java.util.Optional;
+
 /**
  * Инфраструктурный контракт для бизнес-обработчиков инбокса.
  *
@@ -9,14 +11,16 @@ public interface InboxPayloadPlugin<T> {
     InboxEventType getSupportedType();
 
     /**
-     * Десериализация payload в типизированный бизнес-контекст без магии и рефлексии верхнего уровня
+     * Совмещает десериализацию и структурную/бизнес валидацию на самом входе.
+     * @param rawPayload сырая строка из транспорта (Kafka/REST)
+     * @return Optional с типизированным контекстом, либо Optional.empty() если это мусор/яд
      */
-    T deserialize(String rawPayload);
+    Optional<T> validate(String rawPayload);
 
     /**
      * Точка выполнения чистой бизнес-логики в рантайме виртуального потока
      */
-    void process(InboxEvent event, T domainContext) throws Exception;
+    void process(InboxEvent<T> event) throws Exception;
 
     /**
      * Лимит пропускной способности (TPS) под конкретный тип события / группу

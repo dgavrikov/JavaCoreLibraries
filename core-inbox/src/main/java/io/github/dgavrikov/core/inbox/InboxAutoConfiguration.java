@@ -38,7 +38,7 @@ public class InboxAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "inboxMemoryQueue")
-    public BlockingQueue<InboxEvent> inboxMemoryQueue() {
+    public BlockingQueue<InboxEvent<?>> inboxMemoryQueue() {
         return new ArrayBlockingQueue<>(inboxProperties.inMemoryQueue().capacity());
     }
 
@@ -70,7 +70,7 @@ public class InboxAutoConfiguration {
     @ConditionalOnMissingBean(InboxBatchProcessor.class)
     public InboxBatchProcessor inboxBatchProcessor(
             TaskScheduler inboxWorkerScheduler,
-            BlockingQueue<InboxEvent> inboxMemoryQueue,
+            BlockingQueue<InboxEvent<?>> inboxMemoryQueue,
             Collection<InboxPayloadPlugin<?>> plugins,
             InboxProperties properties,
             InboxRepository repository
@@ -86,13 +86,15 @@ public class InboxAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(InboxMaintenanceWorker.class)
     public InboxMaintenanceWorker inboxMaintenanceWorker(
-            BlockingQueue<InboxEvent> inboxMemoryQueue,
+            BlockingQueue<InboxEvent<?>> inboxMemoryQueue,
+            Collection<InboxPayloadPlugin<?>> plugins,
             TaskScheduler inboxMaintenanceScheduler,
             InboxProperties properties,
             InboxRepository repository
     ) {
         return new InboxMaintenanceWorker(
                 inboxMemoryQueue,
+                plugins,
                 inboxMaintenanceScheduler,
                 properties,
                 repository);
@@ -101,9 +103,13 @@ public class InboxAutoConfiguration {
     @Bean
     @ConditionalOnMissingBean(InboxPlatformCoordinator.class)
     public InboxPlatformCoordinator inboxPlatformCoordinator(
-            BlockingQueue<InboxEvent> inboxMemoryQueue,
+            BlockingQueue<InboxEvent<?>> inboxMemoryQueue,
+            Collection<InboxPayloadPlugin<?>> plugins,
             InboxRepository repository
     ) {
-        return new InboxPlatformCoordinator(inboxMemoryQueue, repository);
+        return new InboxPlatformCoordinator(
+                inboxMemoryQueue,
+                plugins,
+                repository);
     }
 }

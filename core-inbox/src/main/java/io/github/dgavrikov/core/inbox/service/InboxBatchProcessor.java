@@ -20,7 +20,8 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class InboxBatchProcessor implements ApplicationListener<ApplicationReadyEvent> {
-    private final BlockingQueue<InboxEvent> inboxMemoryQueue;
+    // Очередь содержит разнородные события, поэтому используем wildcard
+    private final BlockingQueue<InboxEvent<?>> inboxMemoryQueue;
     private final Map<String, InboxPayloadPlugin<?>> pluginRegistry;
     private final ConcurrentMap<String, VirtualThreadRateLimiter> limiters = new ConcurrentHashMap<>();
     private final InboxProperties properties;
@@ -30,7 +31,7 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
 
     public InboxBatchProcessor(
             TaskScheduler taskScheduler,
-            BlockingQueue<InboxEvent> inboxMemoryQueue,
+            BlockingQueue<InboxEvent<?>> inboxMemoryQueue,
             Collection<InboxPayloadPlugin<?>> plugins,
             InboxProperties properties,
             InboxRepository repository
@@ -65,14 +66,14 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
 
     private void processLoop() {
         int batchSize = properties.workerProps().batchSize();
-        List<InboxEvent> batch = new ArrayList<>(batchSize);
+        List<InboxEvent<?>> batch = new ArrayList<>(batchSize);
         inboxMemoryQueue.drainTo(batch, batchSize);
 
         if (batch.isEmpty()) return;
 
         List<CompletableFuture<ExecutionResult>> futures = new ArrayList<>();
 
-        for (InboxEvent event : batch) {
+        for (InboxEvent<?> event : batch) {
             futures.add(CompletableFuture.supplyAsync(() -> executeSingleEvent(event), virtualThreadExecutor));
         }
 
@@ -101,7 +102,7 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
         );
     }
 
-    private ExecutionResult executeSingleEvent(InboxEvent event) {
+    private ExecutionResult executeSingleEvent(InboxEvent<?> event) {
         InboxPayloadPlugin<?> plugin = pluginRegistry.get(event.eventType().name());
         if (plugin == null) {
             return new ExecutionResult(event.messageId(), false, "No plugin registered for type: " + event.eventType().asString());
@@ -113,8 +114,9 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
         }
 
         try {
-            Object domainContext = plugin.deserialize(event.payload());
-            executePlugin(plugin, event, domainContext);
+            // Happy path: Объект уже находится внутри события после валидации в консьюмере.
+            // Повторный вызов ObjectMapper-а и аллокации в куче полностью исключены.
+            executePlugin(plugin, event);
             return new ExecutionResult(event.messageId(), true, null);
         } catch (Exception e) {
             log.error("Error executing business logic for inbox event: {}", event.messageId(), e);
@@ -123,8 +125,9 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    private void executePlugin(InboxPayloadPlugin plugin, InboxEvent event, Object domainContext) throws Exception {
-        plugin.process(event, domainContext);
+    private void executePlugin(InboxPayloadPlugin plugin, InboxEvent<?> event) throws Exception {
+        // Безопасно передаем доменный контекст, распакованный на этапе валидации
+        plugin.process(event);
     }
 
     private record ExecutionResult(String messageId, boolean isSuccess, String reason) {}

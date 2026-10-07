@@ -7,9 +7,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 
 public interface InboxRepository {
-    boolean save(InboxEvent event);
+    boolean save(InboxEvent<?> event);
 
-    List<InboxEvent> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize);
+    List<InboxEvent<?>> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize);
 
     void changeStatusInBatch(List<String> messageIds, InboxStatus status, String reason);
 
