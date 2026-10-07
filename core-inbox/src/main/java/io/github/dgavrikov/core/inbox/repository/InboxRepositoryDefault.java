@@ -21,14 +21,25 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Default production-ready implementation of {@link InboxRepository} built on top of {@link NamedParameterJdbcTemplate}.
+ * Leverages native PostgreSQL performance features such as jsonb type casting, partial indexes alignment,
+ * and concurrent row-locking strategies to support ultra-low-latency transaction execution loops.
+ */
+
 @RequiredArgsConstructor
 public class InboxRepositoryDefault implements InboxRepository {
-    // High-performance optimization: caching the type token as a static constant
-    // completely eliminates short-lived inner class allocations in the JVM Eden space
-    // during high-throughput de-serialization, significantly reducing GC pressure under load.
+    /**
+     * Reusable type reference mapping token used to parse flat JSON metadata headers.
+     * Cached statically to eliminate short-lived inner class allocations inside JVM Eden Space under load.
+     */
     private static final TypeReference<Map<String, String>> HEADERS_TYPE_REF = new TypeReference<>() {
     };
 
+    /**
+     * High-speed raw insertion statement enforcing immediate storage-level idempotent deduplication.
+     * Bypasses the traditional 'NEW' phase by committing directly as 'PROCESSING' to maintain Zero-DB-Read limits.
+     */
     @Language("SQL")
     private static final String SQL_INSERT = """
             INSERT INTO inbox_events (message_id, event_type, payload, headers, status)
@@ -36,6 +47,11 @@ public class InboxRepositoryDefault implements InboxRepository {
                 ON CONFLICT (message_id) DO NOTHING;
             """;
 
+    /**
+     * Distributed concurrency recovery block selecting stale processing traces and failed exponential backoffs.
+     * Utilizes a highly optimized UNION ALL execution plan to map directly onto PostgreSQL partial indexes,
+     * isolating target message records via a non-blocking FOR UPDATE SKIP LOCKED query segment.
+     */
     @Language("SQL")
     private static final String SQL_FETCH_RECOVERY = """
             UPDATE inbox_events
@@ -57,6 +73,11 @@ public class InboxRepositoryDefault implements InboxRepository {
             RETURNING message_id, event_type, payload, headers;
             """;
 
+    /**
+     * Partitioned transaction log deletion segment targeting old historical data entries.
+     * Wraps execution blocks inside a localized Common Table Expression (CTE) with low row limits
+     * and FOR NO KEY UPDATE SKIP LOCKED boundaries to safely wipe indexes without risking lock escalations.
+     */
     @Language("SQL")
     private static final String SQL_PURGE_PROCESSED = """
             WITH rows_to_delete as (
@@ -75,6 +96,11 @@ public class InboxRepositoryDefault implements InboxRepository {
             SELECT count(*) from deleted_rows;
             """;
 
+    /**
+     * Batch state transformation update tracking statement.
+     * Consolidates large multi-row mutations into a single network round-trip, dynamically
+     * incrementing failure thresholds and calculating a strict base-2 exponential delay timing window.
+     */
     @Language("SQL")
     private static final String SQL_UPDATE_STATUS = """
             UPDATE inbox_events
@@ -86,9 +112,21 @@ public class InboxRepositoryDefault implements InboxRepository {
             WHERE message_id IN (:ids)
             """;
 
+    /**
+     * Internal Spring NamedParameterJdbcTemplate engine driver.
+     */
     private final NamedParameterJdbcTemplate jdbcTemplate;
+
+    /**
+     * High-performance Jackson object mapper used for flat metadata map transformations.
+     */
     private final ObjectMapper objectMapper;
 
+    /**
+     * {@inheritDoc}
+     * Maps flat headers into serialized string formats before processing insertions. Catches key integrity
+     * conflicts natively at СУБД level to return clean boolean feedback signals without breaking transactions.
+     */
     @Override
     public boolean save(InboxEvent<?> event) {
         try {
@@ -109,6 +147,10 @@ public class InboxRepositoryDefault implements InboxRepository {
         }
     }
 
+    /**
+     * {@inheritDoc}
+     * Binds parameters into the explicit split UNION ALL schema block to fetch locked event logs.
+     */
     @Override
     public List<InboxEvent<?>> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize) {
         SqlParameterSource params = new MapSqlParameterSource()
@@ -118,6 +160,10 @@ public class InboxRepositoryDefault implements InboxRepository {
         return jdbcTemplate.query(SQL_FETCH_RECOVERY, params, this::mapRowToEvent);
     }
 
+    /**
+     * {@inheritDoc}
+     * Guards execution traps by verifying input size metrics before pushing status updates to the СУБД runtime.
+     */
     @Override
     public void changeStatusInBatch(List<String> messageIds, InboxStatus status, String reason) {
         if (messageIds.isEmpty()) return;
@@ -130,6 +176,11 @@ public class InboxRepositoryDefault implements InboxRepository {
         jdbcTemplate.update(SQL_UPDATE_STATUS, params);
     }
 
+    /**
+     * {@inheritDoc}
+     * Executes targeted cleanup operations within an isolated transaction layer (PROPAGATION_REQUIRES_NEW)
+     * to guarantee index space is recovered even if parent business components experience transaction rollbacks.
+     */
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
     public long purgeProcessed(OffsetDateTime retentionBoundary, int batchSize) {
@@ -140,6 +191,11 @@ public class InboxRepositoryDefault implements InboxRepository {
         return deletedCount != null ? deletedCount : 0L;
     }
 
+    /**
+     * High-speed database mapping extraction function translating raw relational ResultSet structures
+     * back into type-safe immutable wildcard {@link InboxEvent} objects.
+     * Note: domainContext is mapped explicitly as null here, as it requires background re-validation.
+     */
     private InboxEvent<?> mapRowToEvent(ResultSet rs, int rowNum) throws SQLException {
         String typeStr = rs.getString("event_type");
         InboxEventType eventType = () -> typeStr;
