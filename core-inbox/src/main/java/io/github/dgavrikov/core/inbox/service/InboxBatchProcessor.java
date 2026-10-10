@@ -115,6 +115,8 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
 
         if (batch.isEmpty()) return;
 
+        log.debug("Drained batch of {} events from inbox memory queue for async processing.", batch.size());
+
         List<CompletableFuture<ExecutionResult>> futures = new ArrayList<>();
 
         for (InboxEvent<?> event : batch) {
@@ -123,6 +125,8 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
 
         // Aggregate execution barriers across active Virtual Threads without pinning underlying carrier workers
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+        log.debug("All virtual thread tasks completed for current batch of {} events.", batch.size());
 
         // Separate and aggregate multi-state profiles to optimize batch storage modifications
         List<String> processedIds = new ArrayList<>();
@@ -139,10 +143,15 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
 
         // Commit state changes via an optimized split-batch configuration
         if (!processedIds.isEmpty()) {
+            log.debug("Flushing batch of {} successfully processed events to database (Status: PROCESSED).", processedIds.size());
             repository.changeStatusInBatch(processedIds, InboxStatus.PROCESSED, null);
         }
-        failedGroupWithReason.forEach((reason, ids) ->
-                repository.changeStatusInBatch(ids, InboxStatus.FAILED, reason)
+        failedGroupWithReason.forEach((reason, ids) -> {
+                    log.debug("Flushing batch of {} failed events to database (Status: FAILED). Reason snippet: [{}]",
+                            ids.size(), reason != null && reason.length() > 60 ? reason.substring(0, 60) + "..." : reason);
+
+                    repository.changeStatusInBatch(ids, InboxStatus.FAILED, reason);
+                }
         );
     }
 

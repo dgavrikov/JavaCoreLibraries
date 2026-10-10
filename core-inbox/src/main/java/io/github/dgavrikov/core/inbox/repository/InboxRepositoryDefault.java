@@ -20,6 +20,7 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Stream;
 
 /**
  * Default production-ready implementation of {@link InboxRepository} built on top of {@link NamedParameterJdbcTemplate}.
@@ -48,21 +49,37 @@ public class InboxRepositoryDefault implements InboxRepository {
             """;
 
     /**
-     * Distributed concurrency recovery block selecting stale processing traces and failed exponential backoffs.
-     * Utilizes a highly optimized UNION ALL execution plan to map directly onto PostgreSQL partial indexes,
-     * isolating target message records via a non-blocking FOR UPDATE SKIP LOCKED query segment.
+     * Distributed concurrency recovery block selecting stale rows stuck in a 'PROCESSING' state.
+     * Maps natively onto the partial index 'idx_inbox_recovery_processing', executing a non-blocking
+     * FOR UPDATE SKIP LOCKED subquery to safely lock expired message events across multi-pod cluster nodes.
      */
     @Language("SQL")
-    private static final String SQL_FETCH_RECOVERY = """
+    private static final String SQL_FETCH_RECOVERY_PROCESSING = """
             UPDATE inbox_events
             SET updated_at = NOW()
             WHERE message_id IN (
                 SELECT message_id FROM (
                     SELECT message_id, next_execution_at FROM inbox_events
                     WHERE status = 'PROCESSING' AND updated_at <= :timeBoundary
-            
-                    UNION ALL
-            
+                ) h
+                ORDER BY next_execution_at ASC
+                FOR UPDATE SKIP LOCKED
+                LIMIT :batchSize
+            )
+            RETURNING message_id, event_type, payload, headers;
+            """;
+
+    /**
+     * Distributed concurrency recovery block selecting failed events managed by exponential backoff scheduling.
+     * Maps natively onto the partial index 'idx_inbox_recovery_failed', isolating target message records
+     * via a non-blocking FOR UPDATE SKIP LOCKED query segment when their scheduling time horizon is reached.
+     */
+    @Language("SQL")
+    private static final String SQL_FETCH_RECOVERY_FAILED = """
+            UPDATE inbox_events
+            SET updated_at = NOW()
+            WHERE message_id IN (
+                SELECT message_id FROM (
                     SELECT message_id, next_execution_at FROM inbox_events
                     WHERE status = 'FAILED' AND next_execution_at <= NOW()
                 ) h
@@ -72,6 +89,7 @@ public class InboxRepositoryDefault implements InboxRepository {
             )
             RETURNING message_id, event_type, payload, headers;
             """;
+
 
     /**
      * Partitioned transaction log deletion segment targeting old historical data entries.
@@ -149,15 +167,35 @@ public class InboxRepositoryDefault implements InboxRepository {
 
     /**
      * {@inheritDoc}
-     * Binds parameters into the explicit split UNION ALL schema block to fetch locked event logs.
+     * Executes recovery polling using a highly optimized, two-stage sequential database query approach.
+     * First sweeps for stale 'PROCESSING' records; if the requested batch size constraint is not fully satisfied,
+     * dynamically calculates the deficit and drains the remaining slots from scheduling-eligible 'FAILED' records.
+     * This sequence bypasses row-locking union traps in PostgreSQL while ensuring total partial index utilization.
      */
     @Override
     public List<InboxEvent<?>> fetchBatchForRecovery(OffsetDateTime timeBoundary, int batchSize) {
-        SqlParameterSource params = new MapSqlParameterSource()
+        SqlParameterSource processingParams = new MapSqlParameterSource()
                 .addValue("timeBoundary", timeBoundary)
                 .addValue("batchSize", batchSize);
 
-        return jdbcTemplate.query(SQL_FETCH_RECOVERY, params, this::mapRowToEvent);
+        List<InboxEvent<?>>  processedResult = jdbcTemplate.query(SQL_FETCH_RECOVERY_PROCESSING, processingParams, this::mapRowToEvent);
+
+        int remainingSize = batchSize - processedResult.size();
+        if(remainingSize <= 0)
+            return processedResult;
+
+        SqlParameterSource failedParams = new MapSqlParameterSource()
+                .addValue("batchSize", remainingSize);
+
+        List<InboxEvent<?>>  failedResult = jdbcTemplate.query(SQL_FETCH_RECOVERY_FAILED, failedParams, this::mapRowToEvent);
+
+        if(failedResult.isEmpty())
+            return processedResult;
+
+        if (processedResult.isEmpty())
+            return failedResult;
+
+        return Stream.concat(processedResult.stream(), failedResult.stream()).toList();
     }
 
     /**

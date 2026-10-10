@@ -68,9 +68,9 @@ databaseChangeLog:
             tableName: inbox_events
             columns:
               - column:
-                  name: updated_at
-              - column:
                   name: next_execution_at
+              - column:
+                  name: updated_at
             where: "status = 'PROCESSING'"
         - createIndex:
             indexName: idx_inbox_recovery_failed
