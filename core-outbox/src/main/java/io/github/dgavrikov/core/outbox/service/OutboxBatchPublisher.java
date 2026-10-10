@@ -8,7 +8,6 @@ import io.github.dgavrikov.core.outbox.repository.OutboxRepository;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.jspecify.annotations.NonNull;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
 import org.springframework.scheduling.TaskScheduler;
@@ -34,7 +33,7 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
     private final OutboxRepository outboxRepository;
 
     public OutboxBatchPublisher(
-            @Qualifier("outboxPublisherScheduler") TaskScheduler outboxScheduler,
+            TaskScheduler outboxScheduler,
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
@@ -73,7 +72,7 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
         outboxScheduler.schedule(this::drainQueueAndPublish, periodicTrigger);
     }
 
-    public void drainQueueAndPublish() {
+    private void drainQueueAndPublish() {
         List<OutboxEvent> events = new ArrayList<>(outboxProperties.batchPublisher().batchSize());
 
         outboxMemoryQueue.drainTo(events, outboxProperties.batchPublisher().batchSize());
