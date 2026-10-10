@@ -12,7 +12,8 @@ A monorepo containing a set of reusable corporate starter libraries and core uti
 7. [core-uap-security-web](#7-core-uap-security-web) – Authentication and security service integration.
 8. [core-xml](#8-core-xml) – XML processing and data serialization utilities.
 9. [core-state-machine](#9-core-state-machine) – Lightweight declarative finite state machine library optimized for High Load conditions.
-10. [core-outbox] – Transactional Outbox event log library optimized for Java 21 Virtual Threads execution.
+10. [core-outbox](#10-core-outbox) – Transactional Outbox event log library optimized for Java 21 Virtual Threads execution.
+11. [core-inbox](#11-core-inbox) – High-performance Transactional Inbox library with native PostgreSQL partitioning and standalone Virtual Threads execution loops.
 
 ## Build and Installation
 
@@ -419,3 +420,53 @@ io:
             scan-memory-queue-interval-delay-ms: ${OUTBOX_BATCH_PUBLISHER_SCAN_INTERVAL_MS:25}
             batch-size: ${OUTBOX_BATCH_PUBLISHER_BATCH_SIZE:50}
 ```
+
+## 11. core-inbox
+
+Provides a robust, isolated, and high-performance implementation of the **Transactional Inbox** pattern, specifically engineered for high-throughput processing, transactional, and brokerage systems. It guarantees **At-Least-Once** inbound message ingestion, native database-level deduplication, and isolated execution with zero enterprise overhead, completely eliminating heavy AOP aspects and Spring proxy-magic.
+
+### Key Features
+
+1. **Time-Series PostgreSQL Partitioning:** Eliminates B-Tree index bloat and vacuum degradation under relentless write load. Inbound events are routed into native daily tables (`PARTITION BY RANGE (created_at)`), making historical log purging entirely free for CPU and disk I/O via instant `DROP TABLE` routines.
+2. **Zero-DB-Read & Single-Facade Ingestion:** Inbound wire data is parsed, validated against business schemas, and written directly in a `PROCESSING` state. The single platform facade `InboxPlatformCoordinator` handles deduplication natively via compound primary keys `(message_id, created_at)` without any intermediate database lookups on the happy path.
+3. **Poison Pill Isolation Boundary:** Intercepts corrupt or malformed message strings at the edge via the strict `validate()` plugin contract. Invalid events are isolated before hitting the database, preventing recovery threads from spinning infinitely and degrading system performance.
+4. **Lock-Free Rate Limiting:** High-throughput inbound throttling mapped per processing group. Implemented via atomic clocks (`AtomicLong`) and native-compliant thread parking (`LockSupport.parkNanos`). Scales efficiently across millions of virtual threads handling domain business logic without blocking core carrier operating system threads.
+5. **Explicit Thread Separation:** Distinct execution pools (`TaskScheduler`) decouple low-latency in-memory buffer draining from heavy background DDL maintenance loops (daily partition preallocation and table drops).
+6. **Split-Batching Status Update:** Minimizes network round-trips to PostgreSQL. Successful virtual thread executions and backoff retry transitions are collated and flushed in single aggregate `WHERE message_id IN (:ids)` batch queries.
+
+## Quick Start
+
+1. Add the dependency to your `pom.xml`:
+   ```xml
+   <dependency>
+       <groupId>io.github.dgavrikov</groupId>
+       <artifactId>core-inbox</artifactId>
+   </dependency>
+   ```
+2. The library operates as a self-contained, auto-configuring starter. The configuration layer `InboxAutoConfiguration` is booted automatically using the modern `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` standard. No manual `@Import` or `@ComponentScan` directives are required.
+3. Include the parent schema migration script for the base `inbox_events` table into your primary Liquibase changelog-master file (note that concrete child partition tables are dynamically managed via the Java runtime):
+   ```yaml
+   databaseChangeLog:
+     - include:
+         file: classpath:/db/changelog/core-inbox/db.changelog-inbox-1.0.yml
+   ```
+4. Fine-tune processing boundaries, partition preallocation depth, and virtual thread constraints within your `application.yml` if necessary:
+   ```yaml
+   io:
+     github:
+       dgavrikov:
+         core:
+           inbox:
+             in-memory-queue:
+               capacity: \${INBOX_IN_MEMORY_QUEUE_CAPACITY:10000}
+             worker-props:
+               scan-memory-queue-interval-delay-ms: \${INBOX_WORKER_SCAN_INTERVAL_MS:25}
+               batch-size: \${INBOX_WORKER_BATCH_SIZE:50}
+             recovery-props:
+               recovery-interval-delay-ms: \${INBOX_RECOVERY_INTERVAL_DELAY_MS:60000}
+               batch-size: \${INBOX_RECOVERY_BATCH_SIZE:100}
+               time-depth-sec: \${INBOX_RECOVERY_TIME_DEPTH_SEC:30}
+             cleanup-props:
+               cron-expression: "\${INBOX_CLEANUP_CRON_EXPRESSION:0 0 0 * * *}"
+               depth-in-hour: \${INBOX_CLEANUP_DEPTH_IN_HOUR:72} # Evaluated dynamically into drop days
+   ```
