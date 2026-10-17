@@ -15,6 +15,36 @@
     <artifactId>core-parent</artifactId>
     <version>${revision}</version>
     <packaging>pom</packaging>
+
+    <!-- Обязательные метаданные Sonatype для публикации в Maven Central -->
+    <name>JavaCoreLibraries Parent POM</name>
+    <description>A set of reusable high-performance corporate starter libraries optimized for High-Load transactional
+        environments.
+    </description>
+    <url>https://github.com/dgavrikov/JavaCoreLibraries</url>
+
+    <licenses>
+        <license>
+            <name>The Apache Software License, Version 2.0</name>
+            <url>https://apache.org</url>
+        </license>
+    </licenses>
+
+    <developers>
+        <developer>
+            <id>dgavrikov</id>
+            <name>Dmitriy Gavrikov</name>
+            <email>dgavrikov84@gmail.com</email>
+            <timezone>+0300</timezone>
+        </developer>
+    </developers>
+
+    <scm>
+        <connection>scm:git:git://://github.com</connection>
+        <developerConnection>scm:git:ssh://github.com:dgavrikov/JavaCoreLibraries.git</developerConnection>
+        <url>https://github.com</url>
+    </scm>
+
     <modules>
         <module>core-database-postgresql</module>
         <module>core-common-services</module>
@@ -27,10 +57,11 @@
         <module>core-state-machine</module>
         <module>core-outbox</module>
         <module>core-artemis</module>
+        <module>core-inbox</module>
     </modules>
 
     <properties>
-        <revision>3.5.5</revision>
+        <revision>3.5.6</revision>
         <encoding>UTF-8</encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -43,6 +74,9 @@
 
         <maven.compiler-plugin.version>3.15.0</maven.compiler-plugin.version>
         <maven.source-plugin.version>3.4.0</maven.source-plugin.version>
+        <maven.javadoc-plugin.version>3.12.0</maven.javadoc-plugin.version>
+        <maven.gpg-plugin.version>3.2.8</maven.gpg-plugin.version>
+        <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
         <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
 
@@ -82,6 +116,11 @@
             <dependency>
                 <groupId>io.github.dgavrikov</groupId>
                 <artifactId>core-database-postgresql</artifactId>
+                <version>${revision}</version>
+            </dependency>
+            <dependency>
+                <groupId>io.github.dgavrikov</groupId>
+                <artifactId>core-inbox</artifactId>
                 <version>${revision}</version>
             </dependency>
             <dependency>
@@ -337,5 +376,85 @@
             </plugin>
         </plugins>
     </build>
+
+    <profiles>
+        <profile>
+            <id>release</id>
+            <build>
+                <plugins>
+                    <!-- 1. Сборка архивов исходного кода (переопределена на jar-no-fork для безопасности многомодульного релиза) -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>${maven.source-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <!-- 2. Обязательная генерация Javadoc-документации -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>${maven.javadoc-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <doclint>none</doclint> <!-- Отключает жесткие синтаксические падения при сборке доков -->
+                        </configuration>
+                    </plugin>
+
+                    <!-- 3. Криптографическая GPG подпись всех JAR-артефактов перед отправкой -->
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>${maven.gpg-plugin.version}</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <keyname>${gpg.keyname}</keyname>
+                            <passphrase>${gpg.passphrase}</passphrase>
+                            <gpgArguments>
+                                <arg>--pinentry-mode</arg>
+                                <arg>loopback
+                                </arg> <!-- Позволяет передавать пароль в неинтерактивном режиме в CI/CD -->
+                            </gpgArguments>
+                        </configuration>
+                    </plugin>
+
+                    <!-- 4. Современный плагин прямой выгрузки артефактов в Sonatype Central Portal -->
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>${central-publishing-maven-plugin.version}</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
 </project>

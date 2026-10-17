@@ -1,5 +1,8 @@
 package io.github.dgavrikov.core.outbox.service;
 
+import io.github.dgavrikov.core.outbox.metric.OutboxMetricCounters;
+import io.github.dgavrikov.core.outbox.metric.OutboxMetricService;
+import io.github.dgavrikov.core.outbox.metric.OutboxMetricServices;
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxEventType;
 import io.github.dgavrikov.core.outbox.model.OutboxPayloadPlugin;
@@ -17,15 +20,18 @@ import java.util.stream.Collectors;
 
 @Slf4j
 public class OutboxPlatformCoordinator {
+    private final static OutboxMetricServices METRIC_SERVICE = OutboxMetricServices.COORDINATOR;
 
     private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
     private final Map<String, OutboxPayloadPlugin<?>> factoryRegistry;
     private final OutboxRepository outboxRepository;
+    private final OutboxMetricService outboxMetricService;
 
     public OutboxPlatformCoordinator(
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
-            OutboxRepository outboxRepository) {
+            OutboxRepository outboxRepository,
+            OutboxMetricService outboxMetricService) {
         this.outboxMemoryQueue = outboxMemoryQueue;
         this.outboxRepository = outboxRepository;
         factoryRegistry = CollectionUtils.isEmpty(outboxPayloadPluginCollection)
@@ -36,6 +42,7 @@ public class OutboxPlatformCoordinator {
                         plugin -> plugin,
                         (existing, replacement) -> existing
                 ));
+        this.outboxMetricService = outboxMetricService;
     }
 
     /**
@@ -51,6 +58,7 @@ public class OutboxPlatformCoordinator {
     public <T> OutboxPayloadPlugin<T> getPlugin(OutboxEventType eventType) {
         var plugin = factoryRegistry.get(eventType.name());
         if (plugin == null) {
+            outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.PLUGIN_NOT_REGISTRY);
             throw new IllegalArgumentException("Plugin not found for event type: " + eventType);
         }
         return (OutboxPayloadPlugin<T>) plugin;
@@ -104,6 +112,7 @@ public class OutboxPlatformCoordinator {
                     try {
                         boolean enqueued = outboxMemoryQueue.offer(event, 250, java.util.concurrent.TimeUnit.MILLISECONDS);
                         if (!enqueued) {
+                            outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.MEMORY_QUEUE_IS_FULL);
                             log.warn("Outbox memory queue is FULL! Event #{} left for recovery worker.", event.id());
                         }
                     } catch (InterruptedException e) {

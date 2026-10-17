@@ -11,6 +11,9 @@
 
     <artifactId>core-uap-security-web</artifactId>
 
+    <name>JavaCoreLibraries :: Core UAP Security Web</name>
+    <description>Security infrastructure starter providing seamless web integration, request authentication filters, and centralized Identity Provider (IdP) bindings.</description>
+
     <dependencies>
         <dependency>
             <groupId>io.github.dgavrikov</groupId>

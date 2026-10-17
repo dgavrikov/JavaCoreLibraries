@@ -10,6 +10,10 @@
     </parent>
 
     <artifactId>core-logbook-logging</artifactId>
+
+    <name>JavaCoreLibraries :: Core Logbook Logging</name>
+    <description>High-performance inbound and outbound HTTP request/response interception and tracing logging layer utilizing Zalando Logbook engine integration.</description>
+
     <dependencies>
         <dependency>
             <groupId>io.github.dgavrikov</groupId>

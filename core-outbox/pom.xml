@@ -11,6 +11,9 @@
 
     <artifactId>core-outbox</artifactId>
 
+    <name>JavaCoreLibraries :: Core Transactional Outbox</name>
+    <description>Robust, isolated Transactional Outbox event log infrastructure optimized for low-latency delivery and non-blocking Java 21 Virtual Threads scheduling.</description>
+
     <dependencies>
         <dependency>
             <groupId>io.github.dgavrikov</groupId>

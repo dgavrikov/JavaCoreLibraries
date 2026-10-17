@@ -3,6 +3,7 @@ package io.github.dgavrikov.core.outbox;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.dgavrikov.core.config.SchedulerConfigurationBuilder;
 import io.github.dgavrikov.core.config.YamlPropertyLoaderFactory;
+import io.github.dgavrikov.core.outbox.metric.OutboxMetricService;
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxPayloadPlugin;
 import io.github.dgavrikov.core.outbox.properties.OutboxProperties;
@@ -11,6 +12,7 @@ import io.github.dgavrikov.core.outbox.repository.OutboxRepositoryDefault;
 import io.github.dgavrikov.core.outbox.service.OutboxBatchPublisher;
 import io.github.dgavrikov.core.outbox.service.OutboxMaintenanceWorker;
 import io.github.dgavrikov.core.outbox.service.OutboxPlatformCoordinator;
+import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
@@ -38,7 +40,7 @@ public class OutboxAutoConfiguration {
 
     @Bean
     @ConditionalOnMissingBean(name = "outboxMemoryQueue")
-    public BlockingQueue<OutboxEvent> outboxMemoryQueue(){
+    public BlockingQueue<OutboxEvent> outboxMemoryQueue() {
         return new ArrayBlockingQueue<>(outboxProperties.inMemoryQueue().capacity());
     }
 
@@ -66,40 +68,57 @@ public class OutboxAutoConfiguration {
     public OutboxRepository outboxRepository(
             NamedParameterJdbcTemplate namedParameterJdbcTemplate,
             ObjectMapper objectMapper
-    ){
+    ) {
         return new OutboxRepositoryDefault(namedParameterJdbcTemplate, objectMapper);
     }
 
     @Bean
-    @ConditionalOnMissingBean(OutboxBatchPublisher.class)
+    public OutboxMetricService outboxMetricService (MeterRegistry meterRegistry) {
+        return new OutboxMetricService(meterRegistry);
+    }
+
+    @Bean
     public OutboxBatchPublisher outboxBatchPublisher(
             TaskScheduler outboxPublisherScheduler,
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
-            OutboxRepository outboxRepository
+            OutboxRepository outboxRepository,
+            OutboxMetricService outboxMetricService
     ) {
-        return new OutboxBatchPublisher(outboxPublisherScheduler, outboxMemoryQueue, outboxPayloadPluginCollection, outboxProperties, outboxRepository);
+        return new OutboxBatchPublisher(outboxPublisherScheduler,
+                outboxMemoryQueue,
+                outboxPayloadPluginCollection,
+                outboxProperties,
+                outboxRepository,
+                outboxMetricService);
     }
 
     @Bean
-    @ConditionalOnMissingBean(OutboxMaintenanceWorker.class)
     public OutboxMaintenanceWorker outboxMaintenanceWorker(
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
             TaskScheduler outboxMaintenanceScheduler,
             OutboxProperties outboxProperties,
-            OutboxRepository outboxRepository
+            OutboxRepository outboxRepository,
+            OutboxMetricService outboxMetricService
     ) {
-        return new OutboxMaintenanceWorker(outboxMemoryQueue, outboxMaintenanceScheduler, outboxProperties, outboxRepository);
+        return new OutboxMaintenanceWorker(outboxMemoryQueue,
+                outboxMaintenanceScheduler,
+                outboxProperties,
+                outboxRepository,
+                outboxMetricService);
     }
 
     @Bean
-    @ConditionalOnMissingBean(OutboxPlatformCoordinator.class)
     public OutboxPlatformCoordinator outboxPlatformCoordinator(
             BlockingQueue<OutboxEvent> outboxMemoryQueue,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
-            OutboxRepository outboxRepository
-    ){
-        return new OutboxPlatformCoordinator(outboxMemoryQueue, outboxPayloadPluginCollection, outboxRepository);
+            OutboxRepository outboxRepository,
+            OutboxMetricService outboxMetricService
+    ) {
+        return new OutboxPlatformCoordinator(outboxMemoryQueue,
+                outboxPayloadPluginCollection,
+                outboxRepository,
+                outboxMetricService);
     }
 }

@@ -11,6 +11,9 @@
 
     <artifactId>core-database-postgresql</artifactId>
 
+    <name>JavaCoreLibraries :: Core Database PostgreSQL</name>
+    <description>High-performance PostgreSQL database interaction abstraction layer, connection pooling optimization, and automated data-source configurations.</description>
+
     <dependencies>
         <dependency>
             <groupId>io.github.dgavrikov</groupId>

@@ -11,6 +11,9 @@
 
     <artifactId>core-correlation</artifactId>
 
+    <name>JavaCoreLibraries :: Core Correlation Context</name>
+    <description>Distributed context tracking starter managing inbound and outbound HTTP request correlation headers across isolated microservice topologies.</description>
+
     <dependencies>
         <dependency>
             <groupId>io.github.dgavrikov</groupId>

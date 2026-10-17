@@ -11,6 +11,9 @@
 
     <artifactId>core-kafka</artifactId>
 
+    <name>JavaCoreLibraries :: Core Apache Kafka Integration</name>
+    <description>Enterprise Apache Kafka event-driven messaging integration layer, pre-configured reliable producers, and scalable consumer utilities.</description>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework.kafka</groupId>

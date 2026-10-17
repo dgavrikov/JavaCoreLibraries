@@ -11,6 +11,9 @@
 
     <artifactId>core-redis</artifactId>
 
+    <name>JavaCoreLibraries :: Core Redis Integration</name>
+    <description>Enterprise Redis and Redis Sentinel standalone cluster integration module optimized for distributed caching, lock management, and state storage.</description>
+
     <dependencies>
         <dependency>
             <groupId>io.github.dgavrikov</groupId>

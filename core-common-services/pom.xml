@@ -10,6 +10,10 @@
     </parent>
 
     <artifactId>core-common-services</artifactId>
+
+    <name>JavaCoreLibraries :: Core Common Services</name>
+    <description>Foundational services and common utilities for logging, metrics monitoring, distributed tracing, data masking, and performance-optimized structures.</description>
+
     <dependencies>
         <!--
         <dependency>

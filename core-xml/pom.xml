@@ -11,6 +11,9 @@
 
     <artifactId>core-xml</artifactId>
 
+    <name>JavaCoreLibraries :: Core XML Processing</name>
+    <description>Advanced XML data processing layer, streaming parsers, schema validation, and optimized memory-efficient serialization/deserialization utilities.</description>
+
     <dependencies>
         <dependency>
             <groupId>org.springframework</groupId>
