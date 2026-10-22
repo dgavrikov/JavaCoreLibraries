@@ -161,14 +161,12 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
         for (int i = -props.daysBehind(); i <= props.daysAhead(); i++) {
             var targetDate = today.plusDays(i);
 
-            var targetEndDate = targetDate.plusDays(1);
-
             try {
-                var partition = outboxRepository.createPartitionIfNotExists(targetDate, targetEndDate);
+                var partition = outboxRepository.createPartitionIfNotExists(targetDate);
                 log.debug("Partition {} verified or created successfully.", partition.name());
                 createdCount++;
             } catch (Exception e) {
-                log.error("Failed to create partition fromDate={}, toDate={}.", targetDate, targetEndDate, e);
+                log.error("Failed to create partition targetDate={}.", targetDate, e);
                 outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.CLEANUP_ERROR);
                 failedCount++;
             }

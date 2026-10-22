@@ -52,12 +52,40 @@ public interface OutboxRepository {
      */
     List<OutboxEvent> findAbandonedEventsForUpdate(OffsetDateTime dateTime, int batchSize);
 
-    Partition createPartitionIfNotExists(LocalDate fromDate, LocalDate toDate);
+    /**
+     * Proactively builds an outbox partition table for a specific target chronological date if it does not exist.
+     * The implementation encapsulates the partitioning step granularity (e.g., daily interval sizing).
+     *
+     * @param targetDate the target business date that must be covered by a partition
+     * @return a fully qualified {@link Partition} instance representing the verified or created database layout
+     */
+    Partition createPartitionIfNotExists(LocalDate targetDate);
 
+    /**
+     * Inspects the database system catalog to extract all currently attached child tables (active partitions)
+     * bound to the parent outbox master schema, discarding default or fallback structural paths.
+     *
+     * @return an ordered list of active {@link Partition} instances mapped from internal relational tables
+     */
     List<Partition> getActivePartitions();
 
+    /**
+     * Evaluates if a specific partition holds unprocessed transaction logs that are still in-flight.
+     * This method must leverage optimized existential short-circuit verification (e.g., {@code LIMIT 1})
+     * to completely bypass full table scan execution patterns on the СUВD storage layer.
+     *
+     * @param partition the target partition structure descriptor to examine
+     * @return true if the partition contains any log entity requiring pipeline dispatching, false otherwise
+     */
     boolean hasUnsentEventsInPartition(Partition partition);
 
+    /**
+     * Drops the specified physical partition directly from the database system catalog.
+     * Utilizes immediate DDL table disposal to completely bypass Write-Ahead Log (WAL) bloat,
+     * garbage collection (Vacuum) cycles, and extended row-level locking pauses.
+     *
+     * @param partition the target partition layout instance to be discarded from the cluster schema
+     */
     void dropPartition(Partition partition);
 
     /**
@@ -70,7 +98,7 @@ public interface OutboxRepository {
      */
     void updateEventStatusBatch(List<Long> successIds, OutboxStatus outboxStatus);
 
-    record Partition(String name, LocalDate startDate, LocalDate endDate){
+    record Partition(String name, LocalDate startDate){
     }
 
 }

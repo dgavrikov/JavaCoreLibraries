@@ -132,10 +132,10 @@ public class OutboxRepositoryDefault implements OutboxRepository {
     }
 
     @Override
-    public Partition createPartitionIfNotExists(LocalDate fromDate, LocalDate toDate) {
-        int year = fromDate.getYear();
-        int month = fromDate.getMonthValue();
-        int day = fromDate.getDayOfMonth();
+    public Partition createPartitionIfNotExists(LocalDate targetDate) {
+        int year = targetDate.getYear();
+        int month = targetDate.getMonthValue();
+        int day = targetDate.getDayOfMonth();
 
         StringBuilder sb = new StringBuilder(32);
         sb.append(BASE_TABLE_NAME).append("_").append(year).append("_");
@@ -150,9 +150,11 @@ public class OutboxRepositoryDefault implements OutboxRepository {
             throw new IllegalArgumentException("Invalid partition table identifier format built from dates");
         }
 
+        LocalDate toDate = targetDate.plusDays(1);
+
         String ddl = "CREATE TABLE IF NOT EXISTS \"" + partitionName + "\" " +
                 "PARTITION OF \"" + BASE_TABLE_NAME + "\" " +
-                "FOR VALUES FROM ('" + fromDate + "') TO ('" + toDate + "');";
+                "FOR VALUES FROM ('" + targetDate + "') TO ('" + toDate + "');";
 
         try {
             namedParameterJdbcTemplate.update(ddl, Map.of());
@@ -165,13 +167,13 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                 // 42P07 — table_already_exists, 23505 — unique_violation (конфликт в системном каталоге pg_class)
                 if ("42P07".equals(sqlState) || "23505".equals(sqlState)) {
                     log.info("Partition '{}' creation skipped: already created by a concurrent node (SQLState: {}).", partitionName, sqlState);
-                    return new Partition(partitionName, fromDate, toDate);
+                    return new Partition(partitionName, targetDate);
                 }
             }
             throw e;
         }
 
-        return new Partition(partitionName, fromDate, toDate);
+        return new Partition(partitionName, targetDate);
     }
 
     @Override
@@ -204,9 +206,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                 String isoFormatDate = datePart.replace('_', '-');
 
                 LocalDate startDate = LocalDate.parse(isoFormatDate);
-                LocalDate endDate = startDate.plusDays(1);
 
-                partitions.add(new Partition(name, startDate, endDate));
+                partitions.add(new Partition(name, startDate));
             } catch (Exception e) {
                 log.warn("Skipping dynamic partition extraction path. Table relational naming layout '{}' does not match ISO chronological format parameters.", name);
             }
