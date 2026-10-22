@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: core-outbox-setup-partitioning
+      author: d.gavrikov
+      comment: Create partitioned table, indices for outbox.
+      changes:
+        - sqlFile:
+            path: "scripts/v3_outbox_partitioning.sql"
+            endDelimiter: ";"
+            relativeToChangelogFile: true
+            splitStatements: false
+            stripComments: false

@@ -4,6 +4,7 @@ import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxEventType;
 import io.github.dgavrikov.core.outbox.model.OutboxStatus;
 
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -51,16 +52,13 @@ public interface OutboxRepository {
      */
     List<OutboxEvent> findAbandonedEventsForUpdate(OffsetDateTime dateTime, int batchSize);
 
-    /**
-     * Purges successfully dispatched historical events from the active database storage.
-     * Must be executed using isolated batch transactions (e.g., {@code REQUIRES_NEW}) and non-blocking
-     * locks to minimize WAL/Transaction-Log bloating and avoid interference with mainline business traffic.
-     *
-     * @param retentionBoundary the point in time before which historical data is eligible for purging
-     * @param batchSize         the maximum number of records to delete in a single atomic SQL statement pass
-     * @return the total number of deleted rows in the current invocation pass
-     */
-    long deleteSentEventsOlderThan(OffsetDateTime retentionBoundary, int batchSize);
+    Partition createPartitionIfNotExists(LocalDate fromDate, LocalDate toDate);
+
+    List<Partition> getActivePartitions();
+
+    boolean hasUnsentEventsInPartition(Partition partition);
+
+    void dropPartition(Partition partition);
 
     /**
      * Performs a high-performance batch status update for a collection of successfully processed events.
@@ -71,4 +69,8 @@ public interface OutboxRepository {
      * @param outboxStatus the target status to transition into (typically {@link OutboxStatus#SENT})
      */
     void updateEventStatusBatch(List<Long> successIds, OutboxStatus outboxStatus);
+
+    record Partition(String name, LocalDate startDate, LocalDate endDate){
+    }
+
 }

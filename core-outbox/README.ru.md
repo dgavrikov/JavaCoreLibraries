@@ -62,10 +62,13 @@ io:
             time-depth-sec: ${OUTBOX_RECOVERY_TIME_DEPTH_SEC:30}
 
           # Очистка архивных/успешно отправленных данных
-          cleanup-props:
-            cron-expression: "${OUTBOX_CLEANUP_CRON_EXPRESSION:0 0 0 * * *}"
-            depth-in-hour: ${OUTBOX_CLEANUP_DEPTH_IN_HOUR:72}
-            batch-size: ${OUTBOX_CLEANUP_BATCH_SIZE:10000}
+          partitioning:
+            manage-cron-expression: "${OUTBOX_PARTITIONING_MANAGE_CRON_EXPRESSION:0 15 0 * * *}"
+            cleanup-cron-expression: "${OUTBOX_PARTITIONING_CLEANUP_CRON_EXPRESSION:0 0 1 * * *}"
+            count-days-soft-delete: ${OUTBOX_CLEANUP_COUNT_DAYS_SOFT_DELETE:3}
+            count-days-hard-delete: ${OUTBOX_CLEANUP_COUNT_DAYS_HARD_DELETE:5}
+            days-behind: ${OUTBOX_PARTITIONING_DAYS_BEHIND:7}
+            days-ahead: ${OUTBOX_PARTITIONING_DAYS_AHEAD:7}
 ```
 
 ---
@@ -73,86 +76,43 @@ io:
 ## Схема СУБД (Liquibase Миграция)
 
 Рекомендуется подключить этот файл в ваш основной `db.changelog-master.yaml` через механизм `include`. Индексы используют 
-оптимизацию **частичных индексов PostgreSQL (Partial Indexes)**, исключая деградацию производительности таблицы outbox_events 
-при миллионных объемах.
+оптимизацию частичных индексов PostgreSQL (Partial Indexes), что полностью исключает деградацию производительности основной 
+таблицы при миллионных объемах логов.
+
+### Порядок подключения.
+
+1. Изоляция устаревшей схемы данных
+
+Если вы обновляетесь с версии 1.x, необходимо переименовать старую несекционированную таблицу, чтобы освободить системное имя для мастер-таблицы новой архитектуры.
 
 ```yaml
 databaseChangeLog:
-  - changeSet:
-      id: core-outbox-create-events-table-v2
-      author: d.gavrikov
-      comment: Create unified system table for Transactional Outbox with high-load partial indexes
-      changes:
-        - createTable:
-            tableName: outbox_events
-            columns:
-              - column:
-                  name: id
-                  type: BIGINT
-                  autoIncrement: true
-                  constraints:
-                    primaryKey: true
-                    primaryKeyName: pk_outbox_events
-              - column:
-                  name: event_type
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: key_id
-                  type: VARCHAR(50)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: payload
-                  type: JSONB
-                  constraints:
-                    nullable: false
-              - column:
-                  name: headers
-                  type: JSONB
-                  constraints:
-                    nullable: true
-              - column:
-                  name: status
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: reason
-                  type: VARCHAR(1000)
-                  constraints:
-                    nullable: true
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-              - column:
-                  name: updated_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
+  - include:
+    file: "db/changelog/core-outbox/db.changelog-outbox-1.0-rename.yml"
+```
 
-        - createIndex:
-            indexName: idx_outbox_unpublished
-            tableName: outbox_events
-            columns:
-              - column:
-                  name: updated_at
-              - column:
-                  name: id
-            where: "status = 'NEW'"
+2. Развертывание партиционированной структуры
 
-        - createIndex:
-            indexName: idx_outbox_purge_historical
-            tableName: outbox_events
-            columns:
-              - column:
-                  name: created_at
-            where: "status = 'SENT'"
+Подключите базовый скрипт для создания мастер-таблицы с декларативным секционированием по диапазону дат 
+`(PARTITION BY RANGE (created_at))` и дефолтной секции (`outbox_events_default`).
+
+```yaml
+databaseChangeLog:
+  - include:
+    file: "db/changelog/core-outbox/db.changelog-outbox-v3.0-partitions.yml"
+
+```
+
+3. Перенос незавершенных транзакционных логов
+
+Если в старой таблице остались необработанные события (статус `NEW`), подключите скрипт миграции. Он атомарно перенесет 
+активный хвост сообщений в новую партиционированную структуру для предотвращения потери данных.
+
+```yaml
+databaseChangeLog:
+  - include:
+    file: "db/changelog/core-outbox/db.changelog-outbox-v3.0-migration.yml"
+
 ```
 
 ---

@@ -432,17 +432,8 @@ intermediate garbage collection overhead on high-load critical processing paths.
 2. The library operates as a self-contained, auto-configuring starter. The configuration layer **OutboxAutoConfiguration** 
 is booted automatically using the modern `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports` 
 standard. No additional manual @Import or @ComponentScan directives are required within your application.
-   ```yaml
-   databaseChangeLog:
-    - include:
-      file: classpath:/db/changelog/core-outbox/db.changelog-outbox-1.0.yml
-   ```
-3. Include the schema migration script for the outbox_events table into your primary Liquibase changelog-master file:
-   ```yaml
-   databaseChangeLog:
-    - include:
-      file: classpath:/db/changelog/core-outbox/db.changelog-outbox-1.0.yml
-   ```
+  
+3. Include the schema migration script for the outbox_events table into your primary Liquibase changelog-master file. [Link](./core-outbox/README.md#database-schema-liquibase-migration)
 4. Fine-tune processing boundaries and constraints within your application.yml if necessary:
 ```yaml
 io:

@@ -416,12 +416,7 @@ public class CreditCorrelationMapping implements CustomCorrelationMapping {
 2. Библиотека поставляется как автономный автоконфигурируемый стартер. Конфигурация **OutboxAutoConfiguration** подгружается 
 автоматически через стандарт `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. Никаких 
 дополнительных @Import или @ComponentScan в вашем приложении прописывать **не требуется**.
-3. Включите миграцию таблицы `outbox_events` в ваш основной Liquibase `changelog-мастер`:
-   ```yaml
-   databaseChangeLog:
-    - include:
-      file: classpath:/db/changelog/core-outbox/db.changelog-outbox-1.0.yml
-   ```
+3. Включите миграцию таблицы. [Описана в описании модуля](./core-outbox/README.ru.md#схема-субд-liquibase-миграция)
 4. Переопределите параметры и лимиты в вашем application.yml (при необходимости):
 ```yaml
 io:

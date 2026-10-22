@@ -62,97 +62,54 @@ io:
             time-depth-sec: ${OUTBOX_RECOVERY_TIME_DEPTH_SEC:30}
 
           # Historical/successfully sent data purging pipeline settings
-          cleanup-props:
-            cron-expression: "${OUTBOX_CLEANUP_CRON_EXPRESSION:0 0 0 * * *}"
-            depth-in-hour: ${OUTBOX_CLEANUP_DEPTH_IN_HOUR:72}
-            batch-size: ${OUTBOX_CLEANUP_BATCH_SIZE:10000}
+          partitioning:
+            manage-cron-expression: "${OUTBOX_PARTITIONING_MANAGE_CRON_EXPRESSION:0 15 0 * * *}"
+            cleanup-cron-expression: "${OUTBOX_PARTITIONING_CLEANUP_CRON_EXPRESSION:0 0 1 * * *}"
+            count-days-soft-delete: ${OUTBOX_CLEANUP_COUNT_DAYS_SOFT_DELETE:3}
+            count-days-hard-delete: ${OUTBOX_CLEANUP_COUNT_DAYS_HARD_DELETE:5}
+            days-behind: ${OUTBOX_PARTITIONING_DAYS_BEHIND:7}
+            days-ahead: ${OUTBOX_PARTITIONING_DAYS_AHEAD:7}
 ```
 
 ---
 
 ## Database Schema (Liquibase Migration)
 
-It is recommended to include this script into your primary `db.changelog-master.yaml` using the native include element. 
-Database indexes utilize **PostgreSQL Partial Indexes**, eliminating table performance degradation even at multimillion 
-rows scale.
+t is recommended to include this file in your main db.changelog-master.yaml using the include mechanism. The indexes 
+leverage **PostgreSQL Partial Indexes** optimization, completely eliminating performance degradation of the core outbox 
+table under high-throughput workloads with millions of records.
+
+### Deployment & Migration Sequence
+
+1. Legacy Schema Isolation
+
+If migrating from version 1.x, you must first rename the legacy unpartitioned table. This frees up the canonical relational identifier for the new master table layout.
 
 ```yaml
 databaseChangeLog:
-  - changeSet:
-      id: core-outbox-create-events-table-v2
-      author: d.gavrikov
-      comment: Create unified system table for Transactional Outbox with high-load partial indexes
-      changes:
-        - createTable:
-            tableName: outbox_events
-            columns:
-              - column:
-                  name: id
-                  type: BIGINT
-                  autoIncrement: true
-                  constraints:
-                    primaryKey: true
-                    primaryKeyName: pk_outbox_events
-              - column:
-                  name: event_type
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: key_id
-                  type: VARCHAR(50)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: payload
-                  type: JSONB
-                  constraints:
-                    nullable: false
-              - column:
-                  name: headers
-                  type: JSONB
-                  constraints:
-                    nullable: true
-              - column:
-                  name: status
-                  type: VARCHAR(64)
-                  constraints:
-                    nullable: false
-              - column:
-                  name: reason
-                  type: VARCHAR(1000)
-                  constraints:
-                    nullable: true
-              - column:
-                  name: created_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
-              - column:
-                  name: updated_at
-                  type: TIMESTAMP WITH TIME ZONE
-                  defaultValueComputed: NOW()
-                  constraints:
-                    nullable: false
+  - include:
+      file: "db/changelog/core-outbox/db.changelog-outbox-1.0-rename.yml"
+```
 
-        - createIndex:
-            indexName: idx_outbox_unpublished
-            tableName: outbox_events
-            columns:
-              - column:
-                  name: updated_at
-              - column:
-                  name: id
-            where: "status = 'NEW'"
+2. Partitioned Core Infrastructure Deployment
 
-        - createIndex:
-            indexName: idx_outbox_purge_historical
-            tableName: outbox_events
-            columns:
-              - column:
-                  name: created_at
-            where: "status = 'SENT'"
+Include the schema changelog to provision the master table configured with declarative range partitioning 
+(`PARTITION BY RANGE (created_at)`), alongside its fallback default partition (`outbox_events_default`).
+
+```yaml
+databaseChangeLog:
+  - include:
+      file: "db/changelog/core-outbox/db.changelog-outbox-v3.0-partitions.yml"
+```
+
+3. In-Flight Event Data Migration
+
+If the legacy table contains unprocessed transaction logs (status `NEW`), enable the migration script. This execution pass atomically moves the active event tail into the new partitioned layout to eliminate data loss.
+
+```yaml
+databaseChangeLog:
+  - include:
+      file: "db/changelog/core-outbox/db.changelog-outbox-v3.0-migration.yml"
 ```
 
 ---

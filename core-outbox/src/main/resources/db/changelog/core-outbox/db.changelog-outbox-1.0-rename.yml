@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: core-outbox-isolate-legacy-table
+      author: d.gavrikov
+      comment: Rename old outbox table and its indexes to clear namespace
+      changes:
+        - renameTable:
+            oldTableName: outbox_events
+            newTableName: outbox_events_old

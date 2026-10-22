@@ -8,7 +8,7 @@ public record OutboxProperties(
         @DefaultValue InMemoryQueue inMemoryQueue,
         @DefaultValue BatchPublisher batchPublisher,
         @DefaultValue RecoveryProps recoveryProps,
-        @DefaultValue CleanupProps cleanupProps
+        @DefaultValue PartitioningProps partitioning
 ) {
     public record InMemoryQueue(
             @DefaultValue("10000") Integer capacity
@@ -30,10 +30,12 @@ public record OutboxProperties(
     ){
     }
 
-    public record CleanupProps(
-            @DefaultValue("0 0 0 * * *") String cronExpression,
-            @DefaultValue("72") long depthInHour,
-            @DefaultValue("10000") int batchSize
-    ){
-    }
+    public record PartitioningProps(
+            @DefaultValue("0 15 0 * * *") String manageCronExpression,
+            @DefaultValue("0 0 1 * * *") String cleanupCronExpression,
+            @DefaultValue("3") int countDaysSoftDelete, // If all status=SENT -> DROP
+            @DefaultValue("5") int countDaysHardDelete, // DROP
+            @DefaultValue("7") int daysBehind,
+            @DefaultValue("7") int daysAhead
+    ){}
 }

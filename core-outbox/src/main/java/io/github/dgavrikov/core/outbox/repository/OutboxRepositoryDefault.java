@@ -13,21 +13,26 @@ import org.intellij.lang.annotations.Language;
 import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
-import org.springframework.transaction.annotation.Propagation;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.*;
+import java.util.regex.Pattern;
+
 @Slf4j
 @RequiredArgsConstructor
 public class OutboxRepositoryDefault implements OutboxRepository {
+
+    private final static Pattern SQL_TABLE_IDENTIFIER_PATTERN = Pattern.compile("^[a-zA-Z_][a-zA-Z0-9_]*$");
 
     // High-performance optimization: caching the type token as a static constant
     // completely eliminates short-lived inner class allocations in the JVM Eden space
     // during high-throughput de-serialization, significantly reducing GC pressure under load.
     private static final TypeReference<Map<String, String>> HEADERS_TYPE_REF = new TypeReference<>() {};
+
+    private static final String BASE_TABLE_NAME = "outbox_events";
 
     @Language("SQL")
     private static final String SQL_INSERT = """
@@ -66,22 +71,12 @@ public class OutboxRepositoryDefault implements OutboxRepository {
             """;
 
     @Language("SQL")
-    private static final String SQL_PURGE_HISTORICAL = """
-            WITH rows_to_delete AS (
-                SELECT oe.id
-                FROM outbox_events oe
-                WHERE oe.status = :status
-                  AND oe.created_at < :retentionBoundary
-                LIMIT :batchSize
-                FOR NO KEY UPDATE SKIP LOCKED
-            ),
-            deleted_rows AS (
-                DELETE FROM outbox_events oe
-                USING rows_to_delete rtd
-                WHERE rtd.id = oe.id
-                RETURNING oe.id
-            )
-            SELECT count(*) FROM deleted_rows
+    private static final String SQL_GET_ACTIVE_PARTITIONS = """
+            SELECT child.relname AS partition_name
+            FROM pg_inherits
+            JOIN pg_class parent ON pg_inherits.inhparent = parent.oid
+            JOIN pg_class child  ON pg_inherits.inhrelid = child.oid
+            WHERE parent.relname = :masterTable AND child.relname != 'outbox_events_default'
             """;
 
     private final NamedParameterJdbcTemplate namedParameterJdbcTemplate;
@@ -136,16 +131,123 @@ public class OutboxRepositoryDefault implements OutboxRepository {
         return namedParameterJdbcTemplate.query(SQL_FIND_ABANDONED, params, this::mapRowToEvent);
     }
 
-    @Transactional(propagation = Propagation.REQUIRES_NEW)
     @Override
-    public long deleteSentEventsOlderThan(OffsetDateTime retentionBoundary, int batchSize) {
-        var params = new MapSqlParameterSource()
-                .addValue("status", OutboxStatus.SENT.name())
-                .addValue("retentionBoundary", retentionBoundary)
-                .addValue("batchSize", batchSize);
+    public Partition createPartitionIfNotExists(LocalDate fromDate, LocalDate toDate) {
+        int year = fromDate.getYear();
+        int month = fromDate.getMonthValue();
+        int day = fromDate.getDayOfMonth();
 
-        Long deletedCount = namedParameterJdbcTemplate.queryForObject(SQL_PURGE_HISTORICAL, params, Long.class);
-        return deletedCount != null ? deletedCount : 0L;
+        StringBuilder sb = new StringBuilder(32);
+        sb.append(BASE_TABLE_NAME).append("_").append(year).append("_");
+        if (month < 10) sb.append('0');
+        sb.append(month).append("_");
+        if (day < 10) sb.append('0');
+        sb.append(day);
+
+        String partitionName = sb.toString();
+
+        if (!SQL_TABLE_IDENTIFIER_PATTERN.matcher(partitionName).matches()) {
+            throw new IllegalArgumentException("Invalid partition table identifier format built from dates");
+        }
+
+        String ddl = "CREATE TABLE IF NOT EXISTS \"" + partitionName + "\" " +
+                "PARTITION OF \"" + BASE_TABLE_NAME + "\" " +
+                "FOR VALUES FROM ('" + fromDate + "') TO ('" + toDate + "');";
+
+        try {
+            namedParameterJdbcTemplate.update(ddl, Map.of());
+            log.info("Partition '{}' successfully verified or created.", partitionName);
+        } catch (org.springframework.dao.DataAccessException e) {
+            Throwable rootCause = e.getRootCause();
+            if (rootCause instanceof java.sql.SQLException sqlEx) {
+                String sqlState = sqlEx.getSQLState();
+
+                // 42P07 — table_already_exists, 23505 — unique_violation (конфликт в системном каталоге pg_class)
+                if ("42P07".equals(sqlState) || "23505".equals(sqlState)) {
+                    log.info("Partition '{}' creation skipped: already created by a concurrent node (SQLState: {}).", partitionName, sqlState);
+                    return new Partition(partitionName, fromDate, toDate);
+                }
+            }
+            throw e;
+        }
+
+        return new Partition(partitionName, fromDate, toDate);
+    }
+
+    @Override
+    public List<Partition> getActivePartitions() {
+
+        var params = new MapSqlParameterSource().addValue("masterTable", BASE_TABLE_NAME);
+
+        List<String> partitionNames = namedParameterJdbcTemplate.queryForList(
+                SQL_GET_ACTIVE_PARTITIONS,
+                params,
+                String.class
+        );
+
+        if (partitionNames.isEmpty()) {
+            return List.of();
+        }
+
+        String expectedPrefix = BASE_TABLE_NAME + "_";
+        int prefixLength = expectedPrefix.length();
+
+        List<Partition> partitions = new ArrayList<>(partitionNames.size());
+
+        for (String name : partitionNames) {
+            if (name == null || !name.startsWith(expectedPrefix) || name.length() == prefixLength) {
+                continue;
+            }
+
+            try {
+                String datePart = name.substring(prefixLength);
+                String isoFormatDate = datePart.replace('_', '-');
+
+                LocalDate startDate = LocalDate.parse(isoFormatDate);
+                LocalDate endDate = startDate.plusDays(1);
+
+                partitions.add(new Partition(name, startDate, endDate));
+            } catch (Exception e) {
+                log.warn("Skipping dynamic partition extraction path. Table relational naming layout '{}' does not match ISO chronological format parameters.", name);
+            }
+        }
+
+        return partitions;
+    }
+
+    @Override
+    public boolean hasUnsentEventsInPartition(Partition partition) {
+        String partitionName = partition.name();
+        if (!SQL_TABLE_IDENTIFIER_PATTERN.matcher(partitionName).matches()) {
+            throw new IllegalArgumentException("Dangerous partition identifier format detected");
+        }
+
+        StringBuilder sb = new StringBuilder(128);
+        sb.append("SELECT EXISTS (SELECT 1 FROM \"").append(partitionName).append("\" ")
+                .append("WHERE status = 'NEW' LIMIT 1);");
+
+        Boolean hasUnsent = namedParameterJdbcTemplate.queryForObject(
+                sb.toString(),
+                new MapSqlParameterSource(),
+                Boolean.class
+        );
+
+        return hasUnsent != null && hasUnsent;
+    }
+
+
+    @Override
+    public void dropPartition(Partition partition) {
+        String partitionName = partition.name();
+        if (!SQL_TABLE_IDENTIFIER_PATTERN.matcher(partitionName).matches()) {
+            throw new IllegalArgumentException("Dangerous partition identifier format detected");
+        }
+
+        StringBuilder sb = new StringBuilder(64);
+        sb.append("DROP TABLE IF EXISTS \"").append(partitionName).append("\";");
+
+        log.info("Executing hard/soft partition purge. Drop physical table: {}", partitionName);
+        namedParameterJdbcTemplate.getJdbcOperations().execute(sb.toString());
     }
 
     @Override
