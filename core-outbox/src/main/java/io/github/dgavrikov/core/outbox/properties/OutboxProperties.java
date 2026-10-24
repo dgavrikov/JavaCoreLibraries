@@ -33,8 +33,8 @@ public record OutboxProperties(
     public record PartitioningProps(
             @DefaultValue("0 15 0 * * *") String manageCronExpression,
             @DefaultValue("0 0 1 * * *") String cleanupCronExpression,
-            @DefaultValue("3") int countDaysSoftDelete, // If all status=SENT -> DROP
-            @DefaultValue("5") int countDaysHardDelete, // DROP
+            @DefaultValue("30") int countDaysSoftDelete, // If all status=SENT -> DROP
+            @DefaultValue("60") int countDaysHardDelete, // DROP
             @DefaultValue("7") int daysBehind,
             @DefaultValue("7") int daysAhead
     ){}

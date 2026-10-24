@@ -1,11 +1,11 @@
 databaseChangeLog:
   - changeSet:
-      id: core-outbox-migration
+      id: core-outbox-isolate-legacy-table
       author: d.gavrikov
-      comment: Safely migrate data from legacy.
+      comment: Rename old outbox table and its indexes to clear namespace
       changes:
         - sqlFile:
-            path: "scripts/v3_outbox_partitioning.sql"
+            path: "scripts/v1_outbox_rename.sql"
             endDelimiter: ";"
             relativeToChangelogFile: true
             splitStatements: false

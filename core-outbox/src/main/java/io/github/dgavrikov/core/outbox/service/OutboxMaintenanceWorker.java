@@ -54,7 +54,6 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
         periodicTrigger.setInitialDelay(initialDelay);
 
         var cleanupTrigger = new CronTrigger(outboxProperties.partitioning().cleanupCronExpression());
-
         var partitionManagedTrigger = new CronTrigger(outboxProperties.partitioning().manageCronExpression());
 
         outboxScheduler.schedule(this::recoveryLostEvents, periodicTrigger);
@@ -133,7 +132,7 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
                         outboxRepository.dropPartition(part);
                         softDeletedCount++;
                     } else {
-                        log.warn("Partition {} qualifies chronologically for Soft Delete but contains incomplete logs! Drop skipped.", part);
+                        log.info("Partition {} qualifies chronologically for Soft Delete but contains incomplete logs! Drop skipped.", part);
                         skippedCount++;
                     }
                 }

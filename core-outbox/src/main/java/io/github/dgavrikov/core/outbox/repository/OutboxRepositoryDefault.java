@@ -158,7 +158,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
         try {
             namedParameterJdbcTemplate.update(ddl, Map.of());
-            log.info("Partition '{}' successfully verified or created.", partitionName);
+            log.trace("Partition '{}' successfully verified or created.", partitionName);
         } catch (org.springframework.dao.DataAccessException e) {
             Throwable rootCause = e.getRootCause();
             if (rootCause instanceof java.sql.SQLException sqlEx) {
@@ -166,7 +166,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
                 // 42P07 — table_already_exists, 23505 — unique_violation (конфликт в системном каталоге pg_class)
                 if ("42P07".equals(sqlState) || "23505".equals(sqlState)) {
-                    log.info("Partition '{}' creation skipped: already created by a concurrent node (SQLState: {}).", partitionName, sqlState);
+                    log.trace("Partition '{}' creation skipped: already created by a concurrent node (SQLState: {}).", partitionName, sqlState);
                     return new Partition(partitionName, targetDate);
                 }
             }
@@ -209,7 +209,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
                 partitions.add(new Partition(name, startDate));
             } catch (Exception e) {
-                log.warn("Skipping dynamic partition extraction path. Table relational naming layout '{}' does not match ISO chronological format parameters.", name);
+                log.warn("Skipping dynamic partition extraction path. Table relational naming layout '{}' does not " +
+                                "match ISO chronological format parameters.", name, e);
             }
         }
 
@@ -223,12 +224,11 @@ public class OutboxRepositoryDefault implements OutboxRepository {
             throw new IllegalArgumentException("Dangerous partition identifier format detected");
         }
 
-        StringBuilder sb = new StringBuilder(128);
-        sb.append("SELECT EXISTS (SELECT 1 FROM \"").append(partitionName).append("\" ")
-                .append("WHERE status = 'NEW' LIMIT 1);");
+        String sb = "SELECT EXISTS (SELECT 1 FROM \"" + partitionName + "\" " +
+                "WHERE status = 'NEW' LIMIT 1);";
 
         Boolean hasUnsent = namedParameterJdbcTemplate.queryForObject(
-                sb.toString(),
+                sb,
                 new MapSqlParameterSource(),
                 Boolean.class
         );
@@ -245,10 +245,10 @@ public class OutboxRepositoryDefault implements OutboxRepository {
         }
 
         StringBuilder sb = new StringBuilder(64);
-        sb.append("DROP TABLE IF EXISTS \"").append(partitionName).append("\";");
+        sb.append("DROP TABLE IF EXISTS \"").append(partitionName).append("\" CASCADE;");
 
-        log.info("Executing hard/soft partition purge. Drop physical table: {}", partitionName);
-        namedParameterJdbcTemplate.getJdbcOperations().execute(sb.toString());
+        log.trace("Executing hard/soft partition purge. Drop physical table: {}", partitionName);
+        namedParameterJdbcTemplate.update(sb.toString(), Map.of());
     }
 
     @Override
