@@ -10,6 +10,7 @@ import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 
 @UtilityClass
+@Deprecated(forRemoval = true, since = "use TraceInfoParser")
 public class MDCUtils {
     private final static String SPLIT_CHARACTER = ":";
 

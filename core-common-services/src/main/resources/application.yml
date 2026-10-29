@@ -4,6 +4,8 @@ spring:
   application:
     name: ${APPLICATION_NAME:CODE.app-name-default}
 logging:
+  pattern:
+    level: "[%X{traceId:-} %X{spanId:-}] %-5level %logger{36} - %msg%n"
   level:
     root: warn
 management:
@@ -27,6 +29,8 @@ management:
       server:
         max-uri-tags: 200
   tracing:
+    sampling:
+      probability: 1.0 # Для процессинга обычно льем 100% или настраиваем кастомный семплер
     propagation:
       type: W3C
       produce: W3C
