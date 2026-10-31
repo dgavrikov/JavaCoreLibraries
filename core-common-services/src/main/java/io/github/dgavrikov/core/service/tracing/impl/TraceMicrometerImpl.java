@@ -7,80 +7,54 @@ import io.micrometer.observation.Observation;
 import io.micrometer.observation.ObservationRegistry;
 import io.micrometer.observation.transport.Kind;
 import io.micrometer.observation.transport.ReceiverContext;
-import io.micrometer.observation.transport.Propagator.Getter;
 import io.micrometer.tracing.Tracer;
-import io.micrometer.tracing.propagation.Propagator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 @Slf4j
 @RequiredArgsConstructor
 public class TraceMicrometerImpl implements TraceMicrometer {
     private final ObservationRegistry observationRegistry;
     private final Tracer tracer;
-    private final Propagator propagator;
+    private final io.micrometer.tracing.propagation.Propagator propagator;
 
-    // 1. Геттер для Observation (исправляет твою ошибку компиляции)
-    private static final Getter<String> OBSERVATION_W3C_GETTER = (carrier, key) ->
-            "traceparent".equalsIgnoreCase(key) ? carrier : null;
+    private static final io.micrometer.observation.transport.Propagator.Getter<W3CTraceData> OBSERVATION_GETTER =
+            W3CTraceData::getTrace;
 
-    // 2. Геттер для Tracing (нужен для метода extract)
-    private static final io.micrometer.tracing.propagation.Propagator.Getter<String> TRACING_W3C_GETTER = (carrier, key) ->
-            "traceparent".equalsIgnoreCase(key) ? carrier : null;
+    private static final io.micrometer.tracing.propagation.Propagator.Getter<W3CTraceData> TRACING_GETTER =
+            W3CTraceData::getTrace;
 
     @Override
     @NotNull
     public TraceScope openScope(@NotNull String name) {
         Observation observation = Observation.createNotStarted(name, observationRegistry);
-        // Micrometer сам подхватит текущий observation как parent, если он есть в текущем потоке
         observation.start();
         Observation.Scope scope = observation.openScope();
-
         return new TraceScope(observation, scope, getCurrentTraceInfo());
     }
 
     @Override
     @NotNull
     public TraceScope openScope(@NotNull String name, @Nullable String traceInfo) {
-        /* old
         Observation observation;
 
-        if (traceInfo != null && !traceInfo.isBlank()) {
-            // Передаем правильный геттер из пакета observation.transport
-            ReceiverContext<String> context = new ReceiverContext<>(OBSERVATION_W3C_GETTER, Kind.SERVER);
-            context.setCarrier(traceInfo);
-
-            // Извлекаем контекст трассировки с помощью трассировочного геттера
-            propagator.extract(traceInfo, TRACING_W3C_GETTER);
-
-            observation = Observation.createNotStarted(name, () -> context, observationRegistry);
-        } else {
-            observation = Observation.createNotStarted(name, observationRegistry);
-        }
-
-        observation.start();
-        Observation.Scope scope = observation.openScope();
-
-        return new TraceScope(observation, scope, getCurrentTraceInfo());
-
-         */
-        Observation observation;
-
-        // Превращаем наш внутренний "traceId:spanId" в стандартный W3C traceparent на лету и быстро
-        String w3cTraceParent = TraceInfoParser.toW3CTraceParent(traceInfo);
+        String w3cTraceParent = TraceInfoParser.traceParent(traceInfo);
 
         if (w3cTraceParent != null) {
-            ReceiverContext<String> context = new ReceiverContext<>(OBSERVATION_W3C_GETTER, Kind.SERVER);
-            context.setCarrier(w3cTraceParent);
+            W3CTraceData traceData = new W3CTraceData(w3cTraceParent);
 
-            // Пропогатор Micrometer ожидает чистый W3C формат
-            this.propagator.extract(w3cTraceParent, TRACING_W3C_GETTER);
+            ReceiverContext<W3CTraceData> context = new ReceiverContext<>(OBSERVATION_GETTER, Kind.SERVER);
+            context.setCarrier(traceData);
+
+            this.propagator.extract(traceData, TRACING_GETTER);
 
             observation = Observation.createNotStarted(name, () -> context, observationRegistry);
         } else {
-            // Если traceInfo пустой или битый — стартуем чистый контекст (или подхватываем текущий родительский thread-bound трейс)
             observation = Observation.createNotStarted(name, observationRegistry);
         }
 
@@ -98,6 +72,73 @@ public class TraceMicrometerImpl implements TraceMicrometer {
             return null;
         }
         var ctx = currentSpan.context();
-        return ctx.traceId() + ":" + ctx.spanId();
+        // формат: traceId:spanId:parentId
+        return ctx.traceId() + ":" + ctx.spanId() + ":" + ctx.parentId();
+    }
+
+    @Override
+    public void execute(@NotNull String name, @NotNull Consumer<TraceScope> action, @Nullable Consumer<Throwable> onError) {
+        try (var traceScope = openScope(name)) {
+            try {
+                action.accept(traceScope);
+            } catch (Throwable e) {
+                traceScope.observation().error(e);
+                if (onError != null) {
+                    onError.accept(e);
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    @Override
+    public <R> R execute(@NotNull String name, @NotNull Function<TraceScope, R> action, @Nullable Consumer<Throwable> onError) {
+        try (var traceScope = openScope(name)) {
+            try {
+                return action.apply(traceScope);
+            } catch (Throwable e) {
+                traceScope.observation().error(e);
+                if (onError != null) {
+                    onError.accept(e);
+                    return null;
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    @Override
+    public void execute(@NotNull String name, @Nullable String traceInfo, @NotNull Consumer<TraceScope>  action, @Nullable Consumer<Throwable> onError) {
+        try (var traceScope = openScope(name, traceInfo)) {
+            try {
+                action.accept(traceScope);
+            } catch (Throwable e) {
+                traceScope.observation().error(e);
+                if (onError != null) {
+                    onError.accept(e);
+                } else {
+                    throw e;
+                }
+            }
+        }
+    }
+
+    @Override
+    public <R> R execute(@NotNull String name, @Nullable String traceInfo, @NotNull Function<TraceScope, R> action, @Nullable Consumer<Throwable> onError) {
+        try (var traceScope = openScope(name, traceInfo)) {
+            try {
+                return action.apply(traceScope);
+            } catch (Throwable e) {
+                traceScope.observation().error(e);
+                if (onError != null) {
+                    onError.accept(e);
+                    return null;
+                } else {
+                    throw e;
+                }
+            }
+        }
     }
 }

@@ -1,32 +1,30 @@
 package io.github.dgavrikov.core.service.tracing;
 
 import io.micrometer.observation.Observation;
-import lombok.Getter;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 
 /**
- * Легковесный контейнер для try-with-resources.
- * Инкапсулирует scope и observation, исключая утечки контекста.
+ * A lightweight immutable record designed for deterministic tracing context lifecycle management
+ * via {@code try-with-resources}.
+ *
+ * <p>Encapsulates the current {@link Observation} and its active {@link Observation.Scope},
+ * strictly guaranteeing proper cleanup order to eliminate {@code ThreadLocal} state leaks.</p>
+ *
+ * @param observation the active micrometer observation instance tracking the execution.
+ * @param scope       the thread-bound scope boundary controlling the active logging MDC context.
+ * @param traceInfo   the serialized internal state string containing specific tracing identifiers.
  */
-@Getter
-public class TraceScope implements AutoCloseable {
-    private final Observation observation;
-    private final Observation.Scope scope;
-    private final String traceInfo;
-
-    public TraceScope(Observation observation, Observation.Scope scope, String traceInfo) {
-        this.observation = observation;
-        this.scope = scope;
-        this.traceInfo = traceInfo;
-    }
+public record TraceScope(
+        @NotNull Observation observation,
+        @NotNull Observation.Scope scope,
+        @Nullable String traceInfo
+) implements AutoCloseable {
 
     @Override
     public void close() {
-        // Строгий порядок закрытия: сначала scope, затем остановка observation
-        if (scope != null) {
-            scope.close();
-        }
-        if (observation != null) {
-            observation.stop();
-        }
+        // Strict cleanup order: always close the scope boundary before stopping the observation
+        scope.close();
+        observation.stop();
     }
 }
