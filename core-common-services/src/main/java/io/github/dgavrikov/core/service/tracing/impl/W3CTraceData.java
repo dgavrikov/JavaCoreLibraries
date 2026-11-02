@@ -1,7 +1,8 @@
 package io.github.dgavrikov.core.service.tracing.impl;
 
+import io.github.dgavrikov.core.utils.Constants;
+
 public class W3CTraceData implements TraceData{
-    private final static String TRACE_PARENT = "traceparent";
     private final String traceParent;
 
     public W3CTraceData(String traceParent) {
@@ -10,7 +11,7 @@ public class W3CTraceData implements TraceData{
 
     @Override
     public String getTrace(String name) {
-        if(TRACE_PARENT.equalsIgnoreCase(name))
+        if(Constants.TRACE_PARENT_ID.equalsIgnoreCase(name))
             return traceParent;
         return null;
     }

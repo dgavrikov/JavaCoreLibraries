@@ -1,8 +1,10 @@
 package io.github.dgavrikov.core.service.tracing;
 
+import io.github.dgavrikov.core.utils.Constants;
 import io.micrometer.observation.Observation;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import org.slf4j.MDC;
 
 /**
  * A lightweight immutable record designed for deterministic tracing context lifecycle management
@@ -23,8 +25,14 @@ public record TraceScope(
 
     @Override
     public void close() {
-        // Strict cleanup order: always close the scope boundary before stopping the observation
+        // 1. Standard Micrometer scope degradation
         scope.close();
         observation.stop();
+
+        // 2. Structural safety: Forcibly cure the "pain" of external byte-code weaving agents
+        String currentTraceId = MDC.get(Constants.MDC_TRACE_ID);
+        if (Constants.INVALID_TRACE_ID.equals(currentTraceId)) {
+            MDC.remove(Constants.MDC_TRACE_ID);
+        }
     }
 }
