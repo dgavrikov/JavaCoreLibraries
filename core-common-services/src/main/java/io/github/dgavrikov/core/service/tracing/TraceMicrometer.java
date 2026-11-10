@@ -1,5 +1,6 @@
 package io.github.dgavrikov.core.service.tracing;
 
+import io.github.dgavrikov.core.service.tracing.impl.TraceData;
 import io.micrometer.observation.Observation;
 import io.micrometer.observation.transport.Kind;
 import io.micrometer.tracing.Tracer;
@@ -135,13 +136,13 @@ public interface TraceMicrometer {
      * @deprecated Legacy method for raw observation creation with custom transport kind.
      */
     @Deprecated(since = "use openScope")
-    Observation getObservation(io.github.dgavrikov.core.service.tracing.impl.W3CTraceData traceData, String name);
+    Observation getObservation(TraceData traceData, String name);
 
     /**
      * @deprecated Legacy method for raw observation creation with custom transport kind and data.
      */
     @Deprecated(since = "use openScope")
-    Observation getObservation(io.github.dgavrikov.core.service.tracing.impl.W3CTraceData traceData, String name, Kind kind);
+    Observation getObservation(TraceData traceData, String name, Kind kind);
 
     /**
      * @deprecated Legacy method to forcibly restart the current thread scope boundary.

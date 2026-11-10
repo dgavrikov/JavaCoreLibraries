@@ -25,11 +25,11 @@ public class TraceMicrometerImpl implements TraceMicrometer {
     private final Tracer tracer;
     private final io.micrometer.tracing.propagation.Propagator propagator;
 
-    private static final io.micrometer.observation.transport.Propagator.Getter<W3CTraceData> OBSERVATION_GETTER =
-            W3CTraceData::getTrace;
+    private static final io.micrometer.observation.transport.Propagator.Getter<TraceData> OBSERVATION_GETTER =
+            TraceData::getTrace;
 
-    private static final io.micrometer.tracing.propagation.Propagator.Getter<W3CTraceData> TRACING_GETTER =
-            W3CTraceData::getTrace;
+    private static final io.micrometer.tracing.propagation.Propagator.Getter<TraceData> TRACING_GETTER =
+            TraceData::getTrace;
 
     // =========================================================================
     // MODERN IMPLEMENTATION
@@ -55,14 +55,15 @@ public class TraceMicrometerImpl implements TraceMicrometer {
         if (w3cTraceParent != null) {
             W3CTraceData traceData = new W3CTraceData(w3cTraceParent);
 
-            ReceiverContext<W3CTraceData> context = new ReceiverContext<>(OBSERVATION_GETTER, Kind.SERVER);
+            ReceiverContext<TraceData> context = new ReceiverContext<>(OBSERVATION_GETTER, Kind.SERVER);
             context.setCarrier(traceData);
 
             this.propagator.extract(traceData, TRACING_GETTER);
 
             observation = Observation.createNotStarted(name, () -> context, observationRegistry);
         } else {
-            observation = Observation.createNotStarted(name, observationRegistry);
+            observation = Observation.createNotStarted(name, observationRegistry)
+                    .parentObservation(null);
         }
 
         observation.start();
@@ -173,13 +174,13 @@ public class TraceMicrometerImpl implements TraceMicrometer {
     }
 
     @Override
-    public Observation getObservation(W3CTraceData traceData, String name) {
+    public Observation getObservation(TraceData traceData, String name) {
         return getObservation(traceData, name, Kind.SERVER);
     }
 
     @Override
-    public Observation getObservation(W3CTraceData traceData, String name, Kind kind) {
-        ReceiverContext<W3CTraceData> context = new ReceiverContext<>(OBSERVATION_GETTER, kind);
+    public Observation getObservation(TraceData traceData, String name, Kind kind) {
+        ReceiverContext<TraceData> context = new ReceiverContext<>(OBSERVATION_GETTER, kind);
         context.setCarrier(traceData);
         propagator.extract(traceData, TRACING_GETTER);
         return Observation.createNotStarted(name, () -> context, observationRegistry);
