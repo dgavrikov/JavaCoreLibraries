@@ -1,0 +1,21 @@
+databaseChangeLog:
+  - changeSet:
+      id: core-outbox-init-script
+      author: d.gavrikov
+      comment: Create unified system table for Transactional Outbox with high-load indexes
+      changes:
+        - sqlFile:
+            dbms: postgresql
+            relativeToChangelogFile: true
+            path: "scripts/postgresql/outbox-init-v1.sql"
+            endDelimiter: ";"
+            splitStatements: false
+            splitComments: false
+      rollback:
+        - sqlFile:
+            dbms: postgresql
+            relativeToChangelogFile: true
+            path: "scripts/postgresql/outbox-init-v1-rollback.sql"
+            endDelimiter: ";"
+            splitStatements: false
+            splitComments: false

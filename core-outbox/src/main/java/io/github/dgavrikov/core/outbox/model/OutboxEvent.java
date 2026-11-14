@@ -17,6 +17,9 @@ public record OutboxEvent(
         /**Metadata descriptor type determining which plugin routes this event. */
         OutboxEventType eventType,
 
+        /** Execution priority level determining the target memory lane and recovery ordering. */
+        OutboxPriority priority,
+
         /**
          * The business partition key identifier (e.g., Kafka Record Key / REST routing ID).
          * Replaces the legacy aggregateId to detach outbox logic from specific entity lifecycles.

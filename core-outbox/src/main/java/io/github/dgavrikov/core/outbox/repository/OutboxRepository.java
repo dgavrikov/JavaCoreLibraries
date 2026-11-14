@@ -2,6 +2,7 @@ package io.github.dgavrikov.core.outbox.repository;
 
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxEventType;
+import io.github.dgavrikov.core.outbox.model.OutboxPriority;
 import io.github.dgavrikov.core.outbox.model.OutboxStatus;
 
 import java.time.OffsetDateTime;
@@ -32,13 +33,14 @@ public interface OutboxRepository {
      * to guarantee atomic "State-Change + Event-Log" capture.
      *
      * @param eventType    the metadata type descriptor of the event
+     * @param priority     the priority
      * @param keyId        the partition routing key id (e.g., Kafka record partition key)
      * @param payload      the pre-serialized event body content represented as JSONB/JSON string
      * @param headers      the flat transport metadata key-value map; must be serialized to JSONB/JSON
      * @param outboxStatus the initial status of the event (typically {@link OutboxStatus#NEW})
      * @return the fully populated and persisted {@link OutboxEvent} instance including generated ID
      */
-    OutboxEvent save(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers, OutboxStatus outboxStatus);
+    OutboxEvent save(OutboxEventType eventType, OutboxPriority priority, String keyId, String payload, Map<String, String> headers, OutboxStatus outboxStatus);
 
     /**
      * Finds and atomically locks abandoned or stuck events that haven't been processed in time.

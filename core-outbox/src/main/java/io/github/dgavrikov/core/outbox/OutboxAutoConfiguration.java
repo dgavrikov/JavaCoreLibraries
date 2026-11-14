@@ -4,7 +4,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.dgavrikov.core.config.SchedulerConfigurationBuilder;
 import io.github.dgavrikov.core.config.YamlPropertyLoaderFactory;
 import io.github.dgavrikov.core.outbox.metric.OutboxMetricService;
-import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxPayloadPlugin;
 import io.github.dgavrikov.core.outbox.properties.OutboxProperties;
 import io.github.dgavrikov.core.outbox.repository.OutboxRepository;
@@ -12,6 +11,7 @@ import io.github.dgavrikov.core.outbox.repository.OutboxRepositoryDefault;
 import io.github.dgavrikov.core.outbox.service.OutboxBatchPublisher;
 import io.github.dgavrikov.core.outbox.service.OutboxMaintenanceWorker;
 import io.github.dgavrikov.core.outbox.service.OutboxPlatformCoordinator;
+import io.github.dgavrikov.core.outbox.service.OutboxPriorityQueues;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -25,8 +25,6 @@ import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.scheduling.TaskScheduler;
 
 import java.util.Collection;
-import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 
 @AutoConfiguration
 @RequiredArgsConstructor
@@ -39,9 +37,9 @@ public class OutboxAutoConfiguration {
     private final Environment env;
 
     @Bean
-    @ConditionalOnMissingBean(name = "outboxMemoryQueue")
-    public BlockingQueue<OutboxEvent> outboxMemoryQueue() {
-        return new ArrayBlockingQueue<>(outboxProperties.inMemoryQueue().capacity());
+    @ConditionalOnMissingBean(OutboxPriorityQueues.class)
+    public OutboxPriorityQueues outboxPriorityQueues() {
+        return new OutboxPriorityQueues(outboxProperties.publisherProps());
     }
 
     @Bean
@@ -49,7 +47,7 @@ public class OutboxAutoConfiguration {
         boolean isVirtual = env.getProperty("spring.threads.virtual.enabled", Boolean.class, false);
         return new SchedulerConfigurationBuilder("outbox-publisher-")
                 .virtual(isVirtual)
-                .poolSize(1)
+                .poolSize(3)
                 .build();
     }
 
@@ -73,21 +71,21 @@ public class OutboxAutoConfiguration {
     }
 
     @Bean
-    public OutboxMetricService outboxMetricService (MeterRegistry meterRegistry) {
+    public OutboxMetricService outboxMetricService(MeterRegistry meterRegistry) {
         return new OutboxMetricService(meterRegistry);
     }
 
     @Bean
     public OutboxBatchPublisher outboxBatchPublisher(
             TaskScheduler outboxPublisherScheduler,
-            BlockingQueue<OutboxEvent> outboxMemoryQueue,
+            OutboxPriorityQueues outboxPriorityQueues,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository,
             OutboxMetricService outboxMetricService
     ) {
         return new OutboxBatchPublisher(outboxPublisherScheduler,
-                outboxMemoryQueue,
+                outboxPriorityQueues,
                 outboxPayloadPluginCollection,
                 outboxProperties,
                 outboxRepository,
@@ -96,13 +94,13 @@ public class OutboxAutoConfiguration {
 
     @Bean
     public OutboxMaintenanceWorker outboxMaintenanceWorker(
-            BlockingQueue<OutboxEvent> outboxMemoryQueue,
+            OutboxPriorityQueues outboxPriorityQueues,
             TaskScheduler outboxMaintenanceScheduler,
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository,
             OutboxMetricService outboxMetricService
     ) {
-        return new OutboxMaintenanceWorker(outboxMemoryQueue,
+        return new OutboxMaintenanceWorker(outboxPriorityQueues,
                 outboxMaintenanceScheduler,
                 outboxProperties,
                 outboxRepository,
@@ -111,12 +109,12 @@ public class OutboxAutoConfiguration {
 
     @Bean
     public OutboxPlatformCoordinator outboxPlatformCoordinator(
-            BlockingQueue<OutboxEvent> outboxMemoryQueue,
+            OutboxPriorityQueues outboxPriorityQueues,
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxRepository outboxRepository,
             OutboxMetricService outboxMetricService
     ) {
-        return new OutboxPlatformCoordinator(outboxMemoryQueue,
+        return new OutboxPlatformCoordinator(outboxPriorityQueues,
                 outboxPayloadPluginCollection,
                 outboxRepository,
                 outboxMetricService);

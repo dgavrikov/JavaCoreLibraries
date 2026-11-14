@@ -17,32 +17,31 @@ import org.springframework.scheduling.support.PeriodicTrigger;
 import java.time.Duration;
 import java.time.OffsetDateTime;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
 
+/**
+ * Background maintenance worker responsible for abandoned event recovery and historical data purging.
+ */
 @Slf4j
 public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationReadyEvent> {
     private final static OutboxMetricServices METRIC_SERVICE = OutboxMetricServices.MAINTENANCE;
 
-    private final BlockingQueue<OutboxEvent> outboxMemoryQueue;
+    private final OutboxPriorityQueues priorityQueues;
     private final TaskScheduler outboxScheduler;
     private final OutboxProperties outboxProperties;
     private final OutboxRepository outboxRepository;
     private final OutboxMetricService outboxMetricService;
-    private final int capacityThreshold;
 
-    public OutboxMaintenanceWorker(BlockingQueue<OutboxEvent> outboxMemoryQueue,
+    public OutboxMaintenanceWorker(OutboxPriorityQueues priorityQueues,
                                    TaskScheduler outboxScheduler,
                                    OutboxProperties outboxProperties,
                                    OutboxRepository outboxRepository,
                                    OutboxMetricService outboxMetricService) {
-        this.outboxMemoryQueue = outboxMemoryQueue;
+        this.priorityQueues = priorityQueues;
         this.outboxScheduler = outboxScheduler;
         this.outboxProperties = outboxProperties;
         this.outboxRepository = outboxRepository;
-        this.capacityThreshold = (int) (outboxProperties.inMemoryQueue().capacity() * 0.5);
         this.outboxMetricService = outboxMetricService;
     }
-
 
     @Override
     public void onApplicationEvent(@NonNull ApplicationReadyEvent event) {
@@ -61,9 +60,8 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
     private void recoveryLostEvents() {
         log.trace("Recovery outbox worker started.");
 
-        if (outboxMemoryQueue.size() > capacityThreshold) {
-            log.debug("Outbox memory queue is heavily loaded (size: {}). Skipping recovery.",
-                    outboxMemoryQueue.size());
+        if (priorityQueues.areAllQueuesHeavilyLoaded()) {
+            log.debug("All outbox priority queues are heavily loaded. Skipping recovery.");
             outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.MEMORY_QUEUE_HEAVILY_LOADED);
             return;
         }
@@ -71,21 +69,25 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
         var timeBoundary = OffsetDateTime.now()
                 .minusSeconds(outboxProperties.recoveryProps().timeDepthSec());
 
+        // Fetch batch ordered by priority DESC
         List<OutboxEvent> lostEvents = outboxRepository.findAbandonedEventsForUpdate(
                 timeBoundary,
                 outboxProperties.recoveryProps().batchSize()
         );
 
-        if (lostEvents.isEmpty()) return;
+        if (lostEvents.isEmpty()) {
+            return;
+        }
 
-        log.debug("Recovery outbox worker found {} events. Pushing to memory queue.", lostEvents.size());
+        log.debug("Recovery outbox worker found {} events. Distributing to priority queues.", lostEvents.size());
 
         for (var event : lostEvents) {
-            boolean added = outboxMemoryQueue.offer(event);
+            var targetQueue = priorityQueues.getQueue(event.priority());
+            boolean added = targetQueue.offer(event);
             if (!added) {
-                log.info("Outbox memory queue is FULL! Recovery process is stop.");
+                // Do not break the loop: lower/other priority queues might still have free capacity
+                log.info("Outbox {} queue is FULL! Skipping Event #{}.", event.priority(), event.id());
                 outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.MEMORY_QUEUE_IS_FULL);
-                break;
             }
         }
 
