@@ -7,23 +7,42 @@ import jakarta.persistence.*;
 import jakarta.persistence.criteria.*;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.apache.commons.collections4.CollectionUtils;
+import org.apache.commons.collections4.MapUtils;
 import org.hibernate.Hibernate;
+import org.hibernate.StaleObjectStateException;
+import org.hibernate.exception.LockAcquisitionException;
 import org.jetbrains.annotations.NotNull;
+import org.springframework.dao.ConcurrencyFailureException;
+import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.lang.reflect.Field;
 import java.lang.reflect.ParameterizedType;
+import java.sql.SQLException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
 @Component
 @RequiredArgsConstructor
 public class DbFactoryImpl implements DbFactory {
+    private static final Set<Class<? extends Throwable>> LOCKING_EXCEPTIONS = Set.of(
+            StaleObjectStateException.class,
+            LockAcquisitionException.class,
+            OptimisticLockException.class,
+            PessimisticLockingFailureException.class,
+            ConcurrencyFailureException.class
+    );
+    private static final Set<String> DEADLOCK_SQL_STATES = Set.of(
+            "40001", // Serialization failure / Deadlock (стандарт SQL)
+            "40P01"  // "40P01" for PostgreSQL deadlock
+    );
+
     private final EntityManager entityManager;
     private final TransactionTemplate transactionTemplate;
-    private final Map<Class<?>, Map<Class<?>, Field>> FETCH_FIELD_CACHE = new ConcurrentHashMap<>();
+    private final Map<Class<?>, Map<Class<?>, List<Field>>> FETCH_FIELD_CACHE = new ConcurrentHashMap<>();
 
     @Override
     public <T> QueryBuilder<T> select(Class<T> entityClass) {
@@ -49,6 +68,20 @@ public class DbFactoryImpl implements DbFactory {
         return saveEntity;
     }
 
+    @Override
+    public <T> T clearProxy(T entity) {
+        Set<FetchType> requestedTypes = Set.of();
+        Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+        if (entity instanceof Collection<?> results) {
+            if (CollectionUtils.isEmpty(results))
+                return entity;
+            results.forEach(item -> initializeFetchFields(item, requestedTypes, visited));
+        } else {
+            initializeFetchFields(entity, requestedTypes, visited);
+        }
+        return entity;
+    }
+
     private class QueryBuilderImpl<T> implements DbFactory.QueryBuilder<T> {
         private final Class<T> entityClass;
         private QuerySpecification<T> specification;
@@ -62,6 +95,9 @@ public class DbFactoryImpl implements DbFactory {
         private Integer limit;
         private Integer first;
         private Boolean isClear = false;
+        private String nativeSql;
+        private String nativeSqlCount;
+        private Map<String, Object> nativeFilters;
 
         private QueryBuilderImpl(Class<T> entityClass) {
             this.entityClass = entityClass;
@@ -169,25 +205,75 @@ public class DbFactoryImpl implements DbFactory {
             });
         }
 
+        @Override
+        public QueryBuilder<T> nativeQuery(String nativeSql, Map<String, Object> filters) {
+            this.nativeSql = nativeSql;
+            this.nativeFilters = filters;
+            return this;
+        }
+
+        @Override
+        public QueryBuilder<T> nativeQueryCount(String nativeSqlCount, Map<String, Object> filters) {
+            this.nativeSqlCount = nativeSqlCount;
+            this.nativeFilters = filters;
+            return this;
+        }
+
         private List<T> execute() {
             if (isClear)
                 entityManager.clear();
-            List<T> results;
 
-            if (pageable != null && pageable.isPaged() && hql == null) {
-                results = findWithPagination();
-            } else if (hql != null) {
-                results = findByHql();
-            } else {
-                results = findByCriteria();
+            int maxRetries = 3;
+            int retryCount = 0;
+            List<T> results = null;
+
+            while (retryCount < maxRetries) {
+                try {
+                    if (pageable != null && pageable.isPaged() && hql == null) {
+                        results = findWithPagination();
+                    } else if (nativeSql != null) {
+                        results = findByNativeQuery();
+                    } else if (hql != null) {
+                        results = findByHql();
+                    } else {
+                        results = findByCriteria();
+                    }
+
+                    if (!results.isEmpty()) {
+                        Set<FetchType> requestedTypes = fetchTypes != null && fetchTypes.length > 0
+                                ? Set.of(fetchTypes)
+                                : Set.of();
+                        Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
+                        results.forEach(item -> initializeFetchFields(item, requestedTypes, visited));
+                    }
+                    return results;
+                } catch (RuntimeException e) {
+                    retryCount++;
+                    if (isLockingException(e)) {
+                        if (retryCount >= maxRetries) {
+                            throw e;
+                        }
+                        try {
+                            Thread.sleep(100L * retryCount);
+                        } catch (InterruptedException ex) {
+                            Thread.currentThread().interrupt();
+                            throw new RuntimeException("Прервано ожидание перед повторной попыткой", e);
+                        }
+                    } else {
+                        throw e;
+                    }
+                }
             }
 
-            if (!results.isEmpty() && fetchTypes.length > 0) {
-                Set<FetchType> requestedTypes = Set.of(fetchTypes);
-                Set<Object> visited = Collections.newSetFromMap(new IdentityHashMap<>());
-                results.forEach(item -> initializeFetchFields(item, requestedTypes, visited));
-            }
             return results;
+        }
+
+        private List<T> findByNativeQuery() {
+            var query = entityManager.createNamedQuery(nativeSql, entityClass);
+            if (nativeFilters != null)
+                nativeFilters.forEach(query::setParameter);
+
+            return query.getResultList();
         }
 
         private List<T> findByHql() {
@@ -269,6 +355,12 @@ public class DbFactoryImpl implements DbFactory {
         }
 
         private long count() {
+            if (nativeSqlCount != null) {
+                var query = entityManager.createNativeQuery(nativeSqlCount);
+                if (nativeFilters != null)
+                    nativeFilters.forEach(query::setParameter);
+                return ((Number) query.getSingleResult()).longValue();
+            }
             if (hqlCount != null) {
                 var query = entityManager.createQuery(hqlCount);
                 if (filters != null) filters.forEach(query::setParameter);
@@ -305,32 +397,36 @@ public class DbFactoryImpl implements DbFactory {
         var fieldMapping = getFetchFieldMapping(entityClass);
 
         for (var type : types) {
-            Field field = fieldMapping.get(type.getEntityClass());
-            if (field != null)
-                graph.addAttributeNodes(field.getName());
+            List<Field> fields = fieldMapping.get(type.getEntityClass());
+            if (CollectionUtils.isNotEmpty(fields))
+                fields.forEach(field -> graph.addAttributeNodes(field.getName()));
         }
 
         return graph;
     }
 
-    private Map<Class<?>, Field> getFetchFieldMapping(Class<?> clazz) {
-        return FETCH_FIELD_CACHE.computeIfAbsent(clazz, c -> {
-            Map<Class<?>, Field> map = new HashMap<>();
-            var current = c;
-            while (current != null && current != Object.class) {
-                for (var field : current.getDeclaredFields()) {
-                    var targetEntityClass = getGenericType(field);
-                    if (!targetEntityClass.isPrimitive() && targetEntityClass.getName().startsWith("java.lang")) {
-                        if (!map.containsKey(targetEntityClass)) {
-                            field.setAccessible(true);
-                            map.put(targetEntityClass, field);
-                        }
-                    }
+    private Map<Class<?>, List<Field>> getFetchFieldMapping(Class<?> clazz) {
+        var innerMap = FETCH_FIELD_CACHE.computeIfAbsent(clazz, k -> new HashMap<>());
+
+        if (!innerMap.isEmpty())
+            return innerMap;
+
+        Class<?> current = clazz;
+        while (current != null && current != Object.class) {
+            for (var field : current.getDeclaredFields()) {
+                var targetEntityClass = getGenericType(field);
+                if (!targetEntityClass.isPrimitive()
+                        && !targetEntityClass.getName().startsWith("java.lang")
+                        && field.isAnnotationPresent(JoinColumn.class)) {
+                    innerMap.computeIfAbsent(targetEntityClass, k -> {
+                        field.setAccessible(true);
+                        return new ArrayList<>();
+                    }).add(field);
                 }
-                current = current.getSuperclass();
             }
-            return map;
-        });
+            current = current.getSuperclass();
+        }
+        return innerMap;
     }
 
     private Class<?> getGenericType(Field field) {
@@ -358,20 +454,63 @@ public class DbFactoryImpl implements DbFactory {
         }
 
         Object unproxied = Hibernate.unproxy(entity);
-        Map<Class<?>, Field> fieldMappings = getFetchFieldMapping(unproxied.getClass());
+        var fieldMappings = getFetchFieldMapping(unproxied.getClass());
 
-        for (var type : requestedType) {
-            var field = fieldMappings.get(type.getEntityClass());
-            if (field != null) {
-                try {
-                    Object fieldValue = field.get(unproxied);
-                    if (fieldValue != null) {
-                        Hibernate.initialize(fieldValue);
-                        initializeFetchFields(fieldValue, requestedType, visited);
+        if(MapUtils.isNotEmpty(fieldMappings)){
+            for (var type : requestedType) {
+                var fields = fieldMappings.get(type.getEntityClass());
+                if (CollectionUtils.isNotEmpty(fields)) {
+                    for(var field : fields){
+                        try {
+                            Object fieldValue = field.get(unproxied);
+                            if (fieldValue != null) {
+                                Hibernate.initialize(fieldValue);
+                                initializeFetchFields(fieldValue, requestedType, visited);
+                            }
+                        } catch (IllegalAccessException ignore) {
+                        }
                     }
-                } catch (IllegalAccessException ignore) {
                 }
             }
         }
+
+        for (var entry : fieldMappings.entrySet()) {
+            var targetClass = entry.getKey();
+            var fields = entry.getValue();
+            var isRequested = requestedType.stream()
+                    .anyMatch(ft -> ft.getEntityClass().equals(targetClass));
+
+            if(!isRequested) {
+                for(var field : fields) {
+                    try{
+                        var fieldValue = field.get(unproxied);
+                        if(fieldValue != null && !Hibernate.isInitialized(fieldValue)) {
+                            if(Collection.class.isAssignableFrom(field.getType())) {
+                                field.set(unproxied, Collections.emptyList());
+                            } else {
+                                field.set(unproxied, null);
+                            }
+                        }
+                    } catch (IllegalAccessException ignore) {
+
+                    }
+                }
+            }
+        }
+    }
+
+    private boolean isLockingException(Throwable ex) {
+        if (ex == null) return false;
+
+        for(var lockException : LOCKING_EXCEPTIONS){
+            if(lockException.isInstance(ex))
+                return true;
+        }
+
+        if (ex instanceof SQLException sqlEx) {
+            return DEADLOCK_SQL_STATES.contains(sqlEx.getSQLState());
+        }
+
+        return false;
     }
 }

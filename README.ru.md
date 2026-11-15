@@ -187,6 +187,38 @@ public class MetricScheduler implements ApplicationListener<ApplicationReadyEven
    </dependency>
    ```
 
+### Пользовательский маппинг 
+Пример того, как выглядит пользовательский маппинг в сервисе.
+
+```java
+@Component
+public class UserCorrelationMapping implements CustomCorrelationMapping {
+    @Override
+    public Map<String, String> getMapping() {
+        return Map.of("USER_ID", "user_uid");
+    }
+}
+```
+
+Маппинг от команды Credit (Повышенный приоритет order = 10, перетрет базовые значения):
+
+```java
+@Component
+public class CreditCorrelationMapping implements CustomCorrelationMapping {
+    @Override
+    public Map<String, String> getMapping() {
+        return Map.of(
+            "CREDIT_ACCOUNT_UID", "credit_acc_no",
+            CorrelationMdcKeys.CORRELATION_ID, "X-Correlation-Cred" // Перетрет дефолтный X-Correlation-Id
+        );
+    }
+
+    @Override
+    public int getOrder() {
+        return 10; // Гарантирует, что этот маппинг наложится ПОДЖЕ базового и юзерского
+    }
+}
+```
 ---
 
 ## 3. core-database-postgresql

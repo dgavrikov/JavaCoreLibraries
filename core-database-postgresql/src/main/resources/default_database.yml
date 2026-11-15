@@ -10,6 +10,7 @@ spring:
       max-lifetime: ${DATASOURCE_MAX_LIFETIME_MS:1800000}
       keep-alive-time: ${DATASOURCE_KEEP_ALIVE_TIME_MS:40000}
       minimum-idle: ${DATASOURCE_MINIMUM_IDLE:1}
+      transaction-isolation: ${DATASOURCE_TRANSACTION_ISOLATION:TRANSACTION_READ_COMMITTED}
     properties:
       repository-packages: com.gmail.dgavrikov84
       transaction-timeout: ${DATASOURCE_TRANSACTION_TIMEOUT:50}

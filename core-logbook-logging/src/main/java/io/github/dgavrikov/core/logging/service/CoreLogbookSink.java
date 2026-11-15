@@ -3,7 +3,6 @@ package io.github.dgavrikov.core.logging.service;
 import io.github.dgavrikov.core.masking.MaskingMarker;
 import io.github.dgavrikov.core.properties.MdcLoggingProperties;
 import io.github.dgavrikov.core.utils.Constants;
-import io.github.dgavrikov.core.utils.ObjectUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.jspecify.annotations.NonNull;
@@ -84,7 +83,9 @@ public class CoreLogbookSink implements Sink {
 
     private void writeBody(String body, MdcLoggingProperties loggingProperties, String path, String prefix) {
         if (log.isTraceEnabled()) {
-            var responseBody = ObjectUtils.isLogBody(loggingProperties, path) ? body : "skip log body";
+            var responseBody = PathExclusion.isLogBody(loggingProperties.getSkipBodyDebugLogPaths(), path)
+                    ? body
+                    : "skip log body";
             log.trace(MaskingMarker.MASKING_JSON_ALL_MARKER, "\n{} Raw Body: {}", prefix, responseBody);
         }
     }

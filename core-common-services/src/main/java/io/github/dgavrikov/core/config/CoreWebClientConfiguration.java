@@ -7,8 +7,8 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class CoreWebClientConfiguration {
 
-    @Bean
-    public WebResponseHandler webResponseHandler(){
+    @Bean("webResponseHandler")
+    public WebResponseHandler webResponseHandler() {
         return new WebResponseHandler();
     }
 }

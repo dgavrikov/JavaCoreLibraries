@@ -1,5 +1,6 @@
-package io.github.dgavrikov.core.service.logging.converter;
+package io.github.dgavrikov.core.logging.converter;
 
+import io.github.dgavrikov.core.logging.service.PathExclusion;
 import io.github.dgavrikov.core.masking.MaskingMarker;
 import lombok.experimental.Delegate;
 import lombok.extern.slf4j.Slf4j;
@@ -17,14 +18,13 @@ import org.springframework.util.unit.DataSize;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
-import java.util.Set;
 
 @Slf4j
 public record LoggingHttpMessageConverter(
-        @Delegate MappingJackson2HttpMessageConverter delegate
+        @Delegate MappingJackson2HttpMessageConverter delegate,
+        PathExclusion exclusionService
 ) implements HttpMessageConverter<Object> {
     private static final long DATA_SIZE = DataSize.ofKilobytes(256L).toBytes();
-    private static final Set<String> EXCLUDED_TYPE = Set.of("actuator");
 
     @Override
     public boolean canRead(@NonNull Class<?> clazz, @Nullable MediaType mediaType) {
@@ -51,7 +51,10 @@ public record LoggingHttpMessageConverter(
                 log(obj, inputMessage);
             } catch (Exception e) {
                 var body = new String(cachedInputMessage.getBodyAsByteArray(), StandardCharsets.UTF_8);
-                log.debug(MaskingMarker.MASKING_JSON_ALL_MARKER, "\nError convert to Class {} Body: {}\n", clazz, body);
+                if (exclusionService == null || !exclusionService.isExcluded(inputMessage)) {
+                    log.debug(MaskingMarker.MASKING_JSON_ALL_MARKER, "\nError convert to Class {} Body: {}\n", clazz, body);
+                }
+
                 throw e;
             }
         } else {
@@ -62,21 +65,10 @@ public record LoggingHttpMessageConverter(
     }
 
     @Override
-    public void write(@NonNull Object object, @Nullable MediaType contentType, @NonNull HttpOutputMessage outputMessage) throws IOException, HttpMessageNotWritableException {
-        var subType = contentType != null ? contentType.getSubtype() : "";
-
-        boolean isExcluded = false;
-        for (String excluded : EXCLUDED_TYPE) {
-            if (subType.contains(excluded)) {
-                isExcluded = true;
-                break;
-            }
-        }
-
-        if (!isExcluded) {
-            log(object, outputMessage);
-        }
-
+    public void write(@NonNull Object object,
+                      @Nullable MediaType contentType,
+                      @NonNull HttpOutputMessage outputMessage) throws IOException, HttpMessageNotWritableException {
+        log(object, outputMessage);
         delegate.write(object, contentType, outputMessage);
     }
 
@@ -84,10 +76,13 @@ public record LoggingHttpMessageConverter(
         if (!log.isDebugEnabled())
             return;
 
-        try {
-            if (lengthOf(body) > DATA_SIZE)
-                return;
+        if(exclusionService != null && exclusionService.isExcluded(message))
+            return;
 
+        if(lengthOf(body) > DATA_SIZE)
+            return;
+
+        try {
             if (message instanceof HttpRequest) {
                 writeLog(body, "\n>>> Body: {}\n");
             } else if (message instanceof ClientHttpResponse) {

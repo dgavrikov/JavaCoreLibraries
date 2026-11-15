@@ -1,6 +1,8 @@
-package io.github.dgavrikov.core.service.logging.filter.web;
+package io.github.dgavrikov.core.logging.config;
 
-import io.github.dgavrikov.core.service.logging.converter.LoggingHttpMessageConverter;
+import io.github.dgavrikov.core.logging.converter.LoggingHttpMessageConverter;
+import io.github.dgavrikov.core.logging.service.PathExclusion;
+import lombok.RequiredArgsConstructor;
 import org.jspecify.annotations.NonNull;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.converter.HttpMessageConverter;
@@ -9,26 +11,26 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 
 import java.util.List;
 
-@Configuration
+@Configuration(proxyBeanMethods = false)
+@RequiredArgsConstructor
 public class WebConfig implements WebMvcConfigurer {
+    private final PathExclusion exclusionService;
 
     @Override
     public void extendMessageConverters(@NonNull List<HttpMessageConverter<?>> converters) {
-        // Standard Jackson converter is required
-        logMessageReplaceConverter(converters);
+        logMessageReplaceConverter(converters, exclusionService);
     }
 
     public static void logMessageReplaceConverter(List<HttpMessageConverter<?>> converters) {
+        logMessageReplaceConverter(converters, null);
+    }
+
+    public static void logMessageReplaceConverter(List<HttpMessageConverter<?>> converters, PathExclusion exclusionService) {
         var iterator = converters.listIterator();
         while (iterator.hasNext()) {
             var converter = iterator.next();
-            if (converter instanceof MappingJackson2HttpMessageConverter jacksonConverter) {
-                // Remove the standard converter from the list
-                iterator.remove();
-                // Add our custom LoggingHttpMessageConverter that wraps the standard one
-                iterator.add(new LoggingHttpMessageConverter(jacksonConverter));
-                break;
-            }
+            iterator.remove();
+            iterator.add(new LoggingHttpMessageConverter((MappingJackson2HttpMessageConverter) converter, exclusionService));
         }
     }
 }

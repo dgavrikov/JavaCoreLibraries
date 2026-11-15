@@ -1,6 +1,5 @@
 package io.github.dgavrikov.core.utils;
 
-import io.github.dgavrikov.core.properties.MdcLoggingProperties;
 import lombok.experimental.UtilityClass;
 
 @UtilityClass
@@ -9,10 +8,6 @@ public class ObjectUtils {
         return value != null
                 ? value.replace('\n', '_').replace('\r', '_')
                 : null;
-    }
-
-    public static boolean isLogBody(MdcLoggingProperties mdcLoggingProperties, String path) {
-        return mdcLoggingProperties.getSkipBodyDebugLogPaths().stream().noneMatch(path::contains);
     }
 
     public static Long parseLong(String s) {

@@ -184,7 +184,43 @@ Manages incoming and outgoing HTTP request headers to maintain execution context
        <artifactId>core-correlation</artifactId>
    </dependency>
    ```
-   
+
+### Custom Correlation Mapping
+
+n example of how a custom mapping is configured within a microservice:
+
+```java
+@Component
+public class UserCorrelationMapping implements CustomCorrelationMapping {
+    @Override
+    public Map<String, String> getMapping() {
+        return Map.of("USER_ID", "user_uid");
+    }
+}
+
+```
+
+Mapping from the Credit team (higher priority order = 10, will override the base values):
+
+```java
+@Component
+public class CreditCorrelationMapping implements CustomCorrelationMapping {
+    @Override
+    public Map<String, String> getMapping() {
+        return Map.of(
+            "CREDIT_ACCOUNT_UID", "credit_acc_no",
+            CorrelationMdcKeys.CORRELATION_ID, "X-Correlation-Cred" // Overrides the default X-Correlation-Id
+        );
+    }
+
+    @Override
+    public int getOrder() {
+        return 10; // Guarantees this mapping is applied AFTER the base and user mappings
+    }
+}
+
+```
+
 ---
 
 ## 3. core-database-postgresql

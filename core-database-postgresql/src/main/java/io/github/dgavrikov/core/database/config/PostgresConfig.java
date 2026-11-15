@@ -1,5 +1,6 @@
 package io.github.dgavrikov.core.database.config;
 
+import com.zaxxer.hikari.util.IsolationLevel;
 import io.github.dgavrikov.core.config.YamlPropertyLoaderFactory;
 import io.github.dgavrikov.core.database.properties.DatabaseProperties;
 import com.zaxxer.hikari.HikariDataSource;
@@ -17,8 +18,11 @@ import org.springframework.orm.jpa.JpaTransactionManager;
 import org.springframework.orm.jpa.LocalContainerEntityManagerFactoryBean;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.EnableTransactionManagement;
+import org.springframework.transaction.support.DefaultTransactionDefinition;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import javax.sql.DataSource;
+import java.sql.Connection;
 
 @Configuration(proxyBeanMethods = false)
 @PropertySource(value = "classpath:default_database.yml", factory = YamlPropertyLoaderFactory.class)
@@ -62,5 +66,23 @@ public class PostgresConfig {
         txManager.setEntityManagerFactory(emFactory.getObject());
         txManager.setDefaultTimeout(dbProps.getTransactionTimeout());
         return txManager;
+    }
+
+    @Bean
+    public TransactionTemplate transactionTemplate(
+            PlatformTransactionManager postgresTransactionManager,
+            HikariDataSource postgresDataSource) {
+        var definition = new DefaultTransactionDefinition();
+        var isolationName = postgresDataSource.getTransactionIsolation();
+
+        if(isolationName != null && !isolationName.equals("DEFAULT")) {
+            try {
+                int isolationLevelCode = IsolationLevel.valueOf(isolationName).getLevelId();
+                definition.setIsolationLevel(isolationLevelCode);
+            } catch (IllegalArgumentException e) {
+                definition.setIsolationLevel(Connection.TRANSACTION_READ_COMMITTED);
+            }
+        }
+        return new TransactionTemplate(postgresTransactionManager, definition);
     }
 }

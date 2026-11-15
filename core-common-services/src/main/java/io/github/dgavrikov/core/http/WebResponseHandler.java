@@ -1,15 +1,17 @@
 package io.github.dgavrikov.core.http;
 
-import io.github.dgavrikov.core.masking.MaskingMarker;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.StringUtils;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.client.HttpStatusCodeException;
+
 import java.util.Optional;
 import java.util.stream.Stream;
 
 @Slf4j
+@RequiredArgsConstructor
 public class WebResponseHandler {
 
     public <T> WebResponseWrapper<T> mapResponse(ResponseEntity<T> response, boolean bodyRequired) {
@@ -43,7 +45,6 @@ public class WebResponseHandler {
                     .build();
             case HttpStatusCodeException ex -> {
                 var responseBody = ex.getResponseBodyAsString();
-                log.debug(MaskingMarker.MASKING_JSON_MARKER, "\n>>> Error Response Body: {}\n", responseBody);
                 yield builder
                         .statusCode(ex.getStatusCode().value())
                         .statusMessage(StringUtils.defaultIfBlank(ex.getLocalizedMessage(), ex.getStatusText()))

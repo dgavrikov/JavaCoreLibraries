@@ -61,7 +61,7 @@
     </modules>
 
     <properties>
-        <revision>3.5.6</revision>
+        <revision>3.5.8</revision>
         <encoding>UTF-8</encoding>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
@@ -76,7 +76,7 @@
         <maven.source-plugin.version>3.4.0</maven.source-plugin.version>
         <maven.javadoc-plugin.version>3.12.0</maven.javadoc-plugin.version>
         <maven.gpg-plugin.version>3.2.8</maven.gpg-plugin.version>
-        <central-publishing-maven-plugin.version>0.11.0</central-publishing-maven-plugin.version>
+        <central-publishing-maven-plugin.version>0.12.0</central-publishing-maven-plugin.version>
         <flatten-maven-plugin.version>1.7.3</flatten-maven-plugin.version>
         <jacoco-maven-plugin.version>0.8.13</jacoco-maven-plugin.version>
 

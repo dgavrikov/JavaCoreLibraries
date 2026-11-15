@@ -55,15 +55,15 @@ public class CoreLoggingConfiguration {
 
     @Bean("logbookHeaderFilter")
     public BodyFilter logbookHeaderFilter(
-            MdcLoggingProperties mdcLoggingProperties) {
-        return new LogbookJsonPathHeaderFilter(mdcLoggingProperties.getMaskedHeaders());
+            MdcLoggingProperties maskingProperties) {
+        return new LogbookJsonPathHeaderFilter(maskingProperties.getMaskedHeaders());
     }
 
     private ObjectWriter maskingObjectMapper(Jackson2ObjectMapperBuilder builder) {
         var factory = JsonFactory.builder().build();
         var mapper = builder.factory(factory).build();
 
-        mapper.setVisibility(PropertyAccessor.ALL, JsonAutoDetect.Visibility.ANY);
+        mapper.setVisibility(PropertyAccessor.FIELD, JsonAutoDetect.Visibility.ANY);
         Class<?>[] classes = findAnnotationClassesWithReflections("io.github.dgavrikov.core.masking.annotation")
                 .toArray(Class[]::new);
         mapper.setAnnotationIntrospector(new MaskingAnnotationIntrospector(classes));

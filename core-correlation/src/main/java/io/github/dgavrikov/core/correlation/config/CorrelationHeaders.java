@@ -9,6 +9,7 @@ public final class CorrelationHeaders {
     public static final String INITIATOR_HOST = "X-Initiator-Host";
     public static final String INITIATOR_SVC = "X-Initiator-Service";
     public static final String MDM_ID = "X-Mdm-Id";
+    public static final String PATH = "X-Path";
 
 
     private CorrelationHeaders() {

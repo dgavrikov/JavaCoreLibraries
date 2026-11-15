@@ -1,4 +1,4 @@
-package io.github.dgavrikov.core.service.logging.converter;
+package io.github.dgavrikov.core.logging.converter;
 
 import org.jspecify.annotations.NonNull;
 import org.springframework.http.HttpHeaders;

@@ -35,6 +35,15 @@ public interface DbFactory {
      */
     <T> T saveAndFlush(T entity);
 
+    /**
+     * Unwraps and initializes the entity or collection, stripping JPA/Hibernate proxies.
+     *
+     * @param entity the entity or collection to unproxy
+     * @return the processed entity or collection
+     * @param <T> type
+     */
+    <T> T clearProxy(T entity);
+
     interface QueryBuilder<T>{
         record PageResponse<T>(List<T> content, long totalElements){
         }
@@ -136,5 +145,23 @@ public interface DbFactory {
          * @return {@link T} response containing the paginated results.
          */
         PageResponse<T> getPage();
+
+        /**
+         * Sets the native SQL query.
+         *
+         * @param nativeSql the native SQL query string
+         * @param filters   the query parameters mapping parameter names to their respective values
+         * @return the current Builder for fluent method chaining
+         */
+        QueryBuilder<T> nativeQuery(String nativeSql, Map<String, Object> filters);
+
+        /**
+         * Sets the native SQL query used to count the total number of records (for pagination support via getPage).
+         *
+         * @param nativeSqlCount the native SQL count query string (e.g., SELECT COUNT(*) ...)
+         * @param filters        the query parameters mapping parameter names to their respective values
+         * @return the current Builder for fluent method chaining
+         */
+        QueryBuilder<T> nativeQueryCount(String nativeSqlCount, Map<String, Object> filters);
     }
 }
