@@ -110,7 +110,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
         try {
             String jsonHeaders = objectMapper.writeValueAsString(headers);
-            var safePriority = priority != null ? priority : OutboxPriority.MEDIUM;
+            var safePriority = priority != null ? priority : OutboxPriority.defaultPriority();
 
             var params = new MapSqlParameterSource()
                     .addValue("type", eventType.name())

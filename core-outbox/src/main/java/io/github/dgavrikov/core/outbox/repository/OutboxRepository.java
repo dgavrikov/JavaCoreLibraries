@@ -33,7 +33,8 @@ public interface OutboxRepository {
      * to guarantee atomic "State-Change + Event-Log" capture.
      *
      * @param eventType    the metadata type descriptor of the event
-     * @param priority     the priority
+     * @param priority     the processing priority level determining the polling and dispatch order
+     *                     (higher priority events are picked up before lower priority ones)
      * @param keyId        the partition routing key id (e.g., Kafka record partition key)
      * @param payload      the pre-serialized event body content represented as JSONB/JSON string
      * @param headers      the flat transport metadata key-value map; must be serialized to JSONB/JSON

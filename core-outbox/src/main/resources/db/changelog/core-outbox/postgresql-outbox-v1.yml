@@ -9,13 +9,13 @@ databaseChangeLog:
             relativeToChangelogFile: true
             path: "scripts/postgresql/outbox-init-v1.sql"
             endDelimiter: ";"
-            splitStatements: false
-            splitComments: false
+            splitStatements: true
+            stripComments: false
       rollback:
         - sqlFile:
             dbms: postgresql
             relativeToChangelogFile: true
             path: "scripts/postgresql/outbox-init-v1-rollback.sql"
             endDelimiter: ";"
-            splitStatements: false
-            splitComments: false
+            splitStatements: true
+            stripComments: false

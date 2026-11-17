@@ -33,7 +33,7 @@ public class OutboxPriorityQueues {
      * Retrieves the target queue for the given priority, defaulting to MEDIUM.
      */
     public BlockingQueue<OutboxEvent> getQueue(OutboxPriority priority) {
-        return queues.get(priority != null ? priority : OutboxPriority.MEDIUM);
+        return queues.get(priority != null ? priority : OutboxPriority.defaultPriority());
     }
 
     /**

@@ -19,7 +19,10 @@ public enum OutboxPriority {
         return switch (weight) {
             case 2 -> HIGH;
             case 0 -> LOW;
-            default -> MEDIUM;
+            default -> defaultPriority();
         };
     }
+    public static OutboxPriority defaultPriority() {
+        return MEDIUM;
+    };
 }

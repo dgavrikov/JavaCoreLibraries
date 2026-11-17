@@ -96,7 +96,7 @@ public class OutboxPlatformCoordinator {
                                          String keyId,
                                          String payload,
                                          Map<String, String> headers) {
-        return saveAndEnqueue(eventType, OutboxPriority.MEDIUM, keyId, payload, headers);
+        return saveAndEnqueue(eventType, OutboxPriority.defaultPriority(), keyId, payload, headers);
     }
 
     /**
@@ -115,7 +115,7 @@ public class OutboxPlatformCoordinator {
                                          OutboxPriority priority,
                                          String keyId, String payload,
                                          Map<String, String> headers) {
-        return saveAndEnqueue(eventType, priority != null ? priority : OutboxPriority.MEDIUM, keyId, payload, headers);
+        return saveAndEnqueue(eventType, priority != null ? priority : OutboxPriority.defaultPriority(), keyId, payload, headers);
     }
 
     /**

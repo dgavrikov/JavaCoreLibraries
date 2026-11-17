@@ -84,6 +84,6 @@ public interface OutboxPayloadPlugin<T> {
      * @return the target {@link OutboxPriority}; defaults to {@link OutboxPriority#MEDIUM}
      */
     default OutboxPriority getPriority() {
-        return OutboxPriority.MEDIUM;
+        return OutboxPriority.defaultPriority();
     }
 }
