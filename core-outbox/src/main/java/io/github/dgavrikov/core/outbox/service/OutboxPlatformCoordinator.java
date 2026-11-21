@@ -70,7 +70,7 @@ public class OutboxPlatformCoordinator {
      * @param context   the business context object containing data to be published
      * @param <T>       the type of the business context object
      */
-    public <T> OutboxEvent saveEvent(OutboxEventType eventType, T context) {
+    public <T> OutboxEvent saveEvent(OutboxEventType eventType, T context, String traceInfo) {
         OutboxPayloadPlugin<T> plugin = getPlugin(eventType);
 
         String keyId = plugin.extractKeyId(context);
@@ -78,7 +78,8 @@ public class OutboxPlatformCoordinator {
         Map<String, String> headers = plugin.createHeaders(context);
         var priority = plugin.getPriority();
 
-        return saveAndEnqueue(eventType, priority, keyId, payload, headers);
+
+        return saveAndEnqueue(eventType, priority, keyId, payload, headers, traceInfo);
     }
 
     /**
@@ -95,8 +96,9 @@ public class OutboxPlatformCoordinator {
     public OutboxEvent savePrebuiltEvent(OutboxEventType eventType,
                                          String keyId,
                                          String payload,
-                                         Map<String, String> headers) {
-        return saveAndEnqueue(eventType, OutboxPriority.defaultPriority(), keyId, payload, headers);
+                                         Map<String, String> headers,
+                                         String traceInfo) {
+        return saveAndEnqueue(eventType, OutboxPriority.defaultPriority(), keyId, payload, headers, traceInfo);
     }
 
     /**
@@ -113,9 +115,17 @@ public class OutboxPlatformCoordinator {
      */
     public OutboxEvent savePrebuiltEvent(OutboxEventType eventType,
                                          OutboxPriority priority,
-                                         String keyId, String payload,
-                                         Map<String, String> headers) {
-        return saveAndEnqueue(eventType, priority != null ? priority : OutboxPriority.defaultPriority(), keyId, payload, headers);
+                                         String keyId,
+                                         String payload,
+                                         Map<String, String> headers,
+                                         String traceInfo) {
+        return saveAndEnqueue(
+                eventType,
+                priority != null ? priority : OutboxPriority.defaultPriority(),
+                keyId,
+                payload,
+                headers,
+                traceInfo);
     }
 
     /**
@@ -124,10 +134,11 @@ public class OutboxPlatformCoordinator {
      */
     private OutboxEvent saveAndEnqueue(OutboxEventType eventType,
                                        OutboxPriority priority,
-                                       String keyId, String payload,
-                                       Map<String, String>
-                                               headers) {
-        var event = outboxRepository.save(eventType, priority, keyId, payload, headers, OutboxStatus.NEW);
+                                       String keyId,
+                                       String payload,
+                                       Map<String, String> headers,
+                                       String traceInfo) {
+        var event = outboxRepository.save(eventType, priority, keyId, payload, headers, OutboxStatus.NEW, traceInfo);
 
         TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
             @Override

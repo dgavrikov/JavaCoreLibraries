@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS outbox_events
     headers    JSONB,
     status     VARCHAR(64)                             NOT NULL,
     reason     TEXT,
+    trace_info VARCHAR(512)                            NULL,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()  NOT NULL,
     CONSTRAINT pk_outbox_events PRIMARY KEY (id)
@@ -15,6 +16,9 @@ CREATE TABLE IF NOT EXISTS outbox_events
 
 ALTER TABLE outbox_events
     ADD COLUMN IF NOT EXISTS priority SMALLINT NOT NULL DEFAULT 1;
+
+ALTER TABLE outbox_events
+    ADD COLUMN IF NOT EXISTS trace_info VARCHAR(512) NULL;
 
 CREATE INDEX IF NOT EXISTS idx_outbox_unpublished
     ON outbox_events (priority DESC, updated_at ASC, id ASC)

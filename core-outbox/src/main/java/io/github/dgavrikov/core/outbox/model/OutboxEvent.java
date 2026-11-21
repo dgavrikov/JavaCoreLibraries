@@ -33,7 +33,12 @@ public record OutboxEvent(
          * A thread-safe, immutable flat map of transport metadata headers
          * used for distributed tracing (e.g., W3C traceparent, tenantId).
          */
-        Map<String, String> headers
+        Map<String, String> headers,
 
+        /**
+         * Serialized distributed tracing context (e.g., W3C {@code traceparent}/{@code tracestate} or B3)
+         * captured at event creation to link asynchronous outbox relay execution with the origin transaction span.
+         */
+        String traceInfo
 ) {
 }

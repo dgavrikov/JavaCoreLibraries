@@ -32,8 +32,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
     @Language("SQL")
     private static final String SQL_INSERT = """
-            INSERT INTO outbox_events(event_type, priority, key_id, payload, headers, status, created_at, updated_at)
-            VALUES (:type, :priority, :key_id, :payload::jsonb, :headers::jsonb, :status, NOW(), NOW())
+            INSERT INTO outbox_events(event_type, priority, key_id, payload, headers, status, trace_info, created_at, updated_at)
+            VALUES (:type, :priority, :key_id, :payload::jsonb, :headers::jsonb, :status, :trace_info,  NOW(), NOW())
             """;
 
     @Language("SQL")
@@ -61,9 +61,9 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                         SET updated_at = NOW()
                         FROM targets t
                         WHERE oe.id = t.id
-                        RETURNING oe.id, oe.event_type, oe.priority, oe.key_id, oe.payload, oe.headers
+                        RETURNING oe.id, oe.event_type, oe.priority, oe.key_id, oe.payload, oe.headers, oe.trace_info
                     )
-                    SELECT id, event_type, priority, key_id, payload, headers FROM updated
+                    SELECT id, event_type, priority, key_id, payload, headers, trace_info FROM updated
             """;
 
     @Language("SQL")
@@ -106,7 +106,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                             String keyId,
                             String payload,
                             Map<String, String> headers,
-                            OutboxStatus outboxStatus) {
+                            OutboxStatus outboxStatus,
+                            String traceInfo) {
 
         try {
             String jsonHeaders = objectMapper.writeValueAsString(headers);
@@ -118,7 +119,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                     .addValue("key_id", keyId)
                     .addValue("payload", payload)
                     .addValue("headers", jsonHeaders)
-                    .addValue("status", outboxStatus.name());
+                    .addValue("status", outboxStatus.name())
+                    .addValue("trace_info", traceInfo);
 
             var keyHolder = new GeneratedKeyHolder();
             namedParameterJdbcTemplate.update(SQL_INSERT, params, keyHolder, new String[]{"id"});
@@ -131,6 +133,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                     .keyId(keyId)
                     .payload(payload)
                     .headers(headers != null ? headers : Map.of())
+                    .traceInfo(traceInfo)
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error serializing headers for OutboxEvent",e);
@@ -183,6 +186,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                     .keyId(rs.getString("key_id"))
                     .headers(objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF))
                     .payload(rs.getString("payload"))
+                    .traceInfo(rs.getString("trace_info"))
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error de-serializing headers for OutboxEvent", e);

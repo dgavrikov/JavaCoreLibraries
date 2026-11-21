@@ -10,6 +10,7 @@ import io.github.dgavrikov.core.outbox.model.OutboxStatus;
 import io.github.dgavrikov.core.outbox.properties.OutboxProperties;
 import io.github.dgavrikov.core.outbox.repository.OutboxRepository;
 import io.github.dgavrikov.core.service.VirtualThreadRateLimiter;
+import io.github.dgavrikov.core.service.tracing.TraceMicrometer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.jspecify.annotations.NonNull;
@@ -38,6 +39,7 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
     private final OutboxProperties outboxProperties;
     private final OutboxRepository outboxRepository;
     private final OutboxMetricService outboxMetricService;
+    private final TraceMicrometer traceMicrometer;
 
     public OutboxBatchPublisher(
             TaskScheduler outboxScheduler,
@@ -45,12 +47,14 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository,
-            OutboxMetricService outboxMetricService) {
+            OutboxMetricService outboxMetricService,
+            TraceMicrometer traceMicrometer) {
         this.priorityQueues = priorityQueues;
         this.outboxScheduler = outboxScheduler;
         this.outboxProperties = outboxProperties;
         this.outboxRepository = outboxRepository;
         this.outboxMetricService = outboxMetricService;
+        this.traceMicrometer = traceMicrometer;
 
         factoryRegistry = CollectionUtils.isEmpty(outboxPayloadPluginCollection)
                 ? Map.of()
@@ -105,27 +109,31 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
         List<Long> successIds = new ArrayList<>(events.size());
 
         for (var event : events) {
-            try {
-                var plugin = factoryRegistry.get(event.eventType().name());
-                if (plugin == null) {
-                    var reason = "Outbox plugin not registered for " + event.eventType()
-                            + ". Event #" + event.id() + " not send.";
-                    log.warn(reason);
-                    outboxRepository.updateEventStatus(event.id(), OutboxStatus.ERROR, reason);
-                    outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.PLUGIN_NOT_REGISTRY);
-                    continue;
-                }
+            var traceName = "OutboxBatchPublisher"+ event.eventType().name();
+            try (var traceScope = traceMicrometer.openScope(traceName, event.traceInfo())) {
+                try {
+                    var plugin = factoryRegistry.get(event.eventType().name());
+                    if (plugin == null) {
+                        var reason = "Outbox plugin not registered for " + event.eventType()
+                                + ". Event #" + event.id() + " not send.";
+                        log.warn(reason);
+                        outboxRepository.updateEventStatus(event.id(), OutboxStatus.ERROR, reason);
+                        outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.PLUGIN_NOT_REGISTRY);
+                        continue;
+                    }
 
-                var limiter = limitersRegistry.get(plugin.getRateLimitGroupId());
-                if (limiter != null) {
-                    limiter.acquire();
-                }
+                    var limiter = limitersRegistry.get(plugin.getRateLimitGroupId());
+                    if (limiter != null) {
+                        limiter.acquire();
+                    }
 
-                plugin.sendEvent(event);
-                successIds.add(event.id());
-            } catch (Exception e) {
-                log.error("Fail to sent Event #{}.", event.id(), e);
-                outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.EVENT_SENDING_FAILED);
+                    plugin.sendEvent(event);
+                    successIds.add(event.id());
+                } catch (Exception e) {
+                    traceScope.observation().error(e);
+                    log.error("Fail to sent Event #{}.", event.id(), e);
+                    outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.EVENT_SENDING_FAILED);
+                }
             }
         }
 

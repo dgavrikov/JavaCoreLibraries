@@ -85,7 +85,6 @@ public class OutboxMaintenanceWorker implements ApplicationListener<ApplicationR
             var targetQueue = priorityQueues.getQueue(event.priority());
             boolean added = targetQueue.offer(event);
             if (!added) {
-                // Do not break the loop: lower/other priority queues might still have free capacity
                 log.info("Outbox {} queue is FULL! Skipping Event #{}.", event.priority(), event.id());
                 outboxMetricService.increment(METRIC_SERVICE, OutboxMetricCounters.MEMORY_QUEUE_IS_FULL);
             }

@@ -41,7 +41,13 @@ public interface OutboxRepository {
      * @param outboxStatus the initial status of the event (typically {@link OutboxStatus#NEW})
      * @return the fully populated and persisted {@link OutboxEvent} instance including generated ID
      */
-    OutboxEvent save(OutboxEventType eventType, OutboxPriority priority, String keyId, String payload, Map<String, String> headers, OutboxStatus outboxStatus);
+    OutboxEvent save(OutboxEventType eventType,
+                     OutboxPriority priority,
+                     String keyId,
+                     String payload, Map<String, String> headers,
+                     OutboxStatus outboxStatus,
+                     String traceInfo
+    );
 
     /**
      * Finds and atomically locks abandoned or stuck events that haven't been processed in time.

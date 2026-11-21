@@ -12,6 +12,7 @@ import io.github.dgavrikov.core.outbox.service.OutboxBatchPublisher;
 import io.github.dgavrikov.core.outbox.service.OutboxMaintenanceWorker;
 import io.github.dgavrikov.core.outbox.service.OutboxPlatformCoordinator;
 import io.github.dgavrikov.core.outbox.service.OutboxPriorityQueues;
+import io.github.dgavrikov.core.service.tracing.TraceMicrometer;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
@@ -82,14 +83,16 @@ public class OutboxAutoConfiguration {
             Collection<OutboxPayloadPlugin<?>> outboxPayloadPluginCollection,
             OutboxProperties outboxProperties,
             OutboxRepository outboxRepository,
-            OutboxMetricService outboxMetricService
+            OutboxMetricService outboxMetricService,
+            TraceMicrometer traceMicrometer
     ) {
         return new OutboxBatchPublisher(outboxPublisherScheduler,
                 outboxPriorityQueues,
                 outboxPayloadPluginCollection,
                 outboxProperties,
                 outboxRepository,
-                outboxMetricService);
+                outboxMetricService,
+                traceMicrometer);
     }
 
     @Bean
