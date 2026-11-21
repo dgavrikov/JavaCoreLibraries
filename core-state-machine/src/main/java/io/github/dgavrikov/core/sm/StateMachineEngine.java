@@ -1,12 +1,11 @@
 package io.github.dgavrikov.core.sm;
 
-import io.github.dgavrikov.core.service.tracing.SpanMicrometer;
+import io.github.dgavrikov.core.service.tracing.TraceMicrometer;
 import io.github.dgavrikov.core.sm.exception.SmInvalidStateException;
 import io.github.dgavrikov.core.sm.exception.SmStateTransmissionNotSupportException;
 import io.micrometer.core.instrument.Counter;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Tags;
-import io.micrometer.observation.transport.Kind;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -23,7 +22,7 @@ public class StateMachineEngine<ID, S extends SmState> {
     );
 
     private final SmNotifyService<ID, S, ? extends ContextData<ID, S>> notifyService;
-    private final SpanMicrometer spanMicrometer;
+    private final TraceMicrometer traceMicrometer;
     private final MeterRegistry meterRegistry;
 
     @PostConstruct
@@ -47,15 +46,20 @@ public class StateMachineEngine<ID, S extends SmState> {
             SmWorkflowRegistry<ID, S, T> registry,
             SmStorageAdapter<ID, S, T> storageAdapter
     ) {
-        var span = spanMicrometer.getObservation(
+        /*
+        var span = traceMicrometer.getObservation(
                 contextData.getTraceInfo(),
                 "StateMachineEngine_" + registry.workflowName(),
                 Kind.SERVER).start();
         var scope = span.openScope();
+
+         */
         boolean hasError = false;
         StepDefinition<ID, S, T> step = null;
 
-        try {
+        try (var traceScope = traceMicrometer.openScope(
+                "StateMachineEngine_" + registry.workflowName(),
+                contextData.getTraceInfo())){
             var runtimeCtx = new SmRuntimeContext<>(contextData);
             boolean runToCompletion = true;
 
@@ -125,10 +129,13 @@ public class StateMachineEngine<ID, S extends SmState> {
                     "Engine Crash: " + e.getLocalizedMessage()
             );
             incrementMeterCounter(SmMeterCounters.ENGINE_CRASH);
-        } finally {
+        }
+        /*
+        finally {
             scope.close();
             span.stop();
         }
+         */
 
         return !hasError;
     }
