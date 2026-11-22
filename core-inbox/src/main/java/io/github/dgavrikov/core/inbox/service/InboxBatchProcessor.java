@@ -9,6 +9,7 @@ import io.github.dgavrikov.core.inbox.model.InboxStatus;
 import io.github.dgavrikov.core.inbox.properties.InboxProperties;
 import io.github.dgavrikov.core.inbox.repository.InboxRepository;
 import io.github.dgavrikov.core.service.VirtualThreadRateLimiter;
+import io.github.dgavrikov.core.service.tracing.TraceMicrometer;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
 import org.jetbrains.annotations.NotNull;
@@ -29,6 +30,8 @@ import java.util.stream.Collectors;
 @Slf4j
 public class InboxBatchProcessor implements ApplicationListener<ApplicationReadyEvent> {
     private final static InboxMetricServices METRIC_SERVICE = InboxMetricServices.PROCESSOR;
+    private static final String SPAN_INBOX_PROCESS = "inbox.event.process";
+
 
     /**
      * Heterogeneous in-memory buffer queue utilizing wildcards to transport diverse domain context objects.
@@ -67,6 +70,8 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
 
     private final InboxMetricService inboxMetricService;
 
+    private final TraceMicrometer traceMicrometer;
+
     /**
      * Initializes the core batch execution pipeline, builds internal plugin routing tables,
      * and seeds non-blocking throttling groups based on provided extension constraints.
@@ -77,13 +82,15 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
             Collection<InboxPayloadPlugin<?>> plugins,
             InboxProperties properties,
             InboxRepository repository,
-            InboxMetricService inboxMetricService
+            InboxMetricService inboxMetricService,
+            TraceMicrometer traceMicrometer
     ) {
         this.taskScheduler = taskScheduler;
         this.inboxMemoryQueue = inboxMemoryQueue;
         this.properties = properties;
         this.repository = repository;
         this.inboxMetricService = inboxMetricService;
+        this.traceMicrometer = traceMicrometer;
         this.virtualThreadExecutor = Executors.newVirtualThreadPerTaskExecutor();
 
         this.pluginRegistry = CollectionUtils.isEmpty(plugins)
@@ -172,26 +179,34 @@ public class InboxBatchProcessor implements ApplicationListener<ApplicationReady
      * @return An internal execution diagnostic tuple structure reporting completion status or failure logs.
      */
     private ExecutionResult executeSingleEvent(InboxEvent<?> event) {
-        InboxPayloadPlugin<?> plugin = pluginRegistry.get(event.eventType().name());
-        if (plugin == null) {
-            inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.PLUGIN_NOT_REGISTRY);
-            return new ExecutionResult(event.messageId(), false, "No plugin registered for type: " + event.eventType().asString());
+        try (var traceScope = traceMicrometer.openScope(SPAN_INBOX_PROCESS, event.traceInfo())) {
+            traceScope.observation()
+                    .lowCardinalityKeyValue("inbox.event.type", event.eventType().name())
+                    .highCardinalityKeyValue("inbox.message.id", event.messageId());
+
+            InboxPayloadPlugin<?> plugin = pluginRegistry.get(event.eventType().name());
+            if (plugin == null) {
+                inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.PLUGIN_NOT_REGISTRY);
+                return new ExecutionResult(event.messageId(), false, "No plugin registered for type: " + event.eventType().asString());
+            }
+
+            VirtualThreadRateLimiter limiter = limiters.get(plugin.getRateLimitGroupId());
+            if (limiter != null) {
+                limiter.acquire();
+            }
+
+            try {
+                // Happy path: Domain context is pre-loaded on the edge to minimize GC pressure and bypass repetitive Jackson overhead
+                executePlugin(plugin, event);
+                return new ExecutionResult(event.messageId(), true, null);
+            } catch (Exception e) {
+                traceScope.observation().error(e);
+                log.error("Error executing business logic for inbox event: {}", event.messageId(), e);
+                inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.EVENT_PROCESSING_FAILED);
+                return new ExecutionResult(event.messageId(), false, e.getMessage());
+            }
         }
 
-        VirtualThreadRateLimiter limiter = limiters.get(plugin.getRateLimitGroupId());
-        if (limiter != null) {
-            limiter.acquire();
-        }
-
-        try {
-            // Happy path: Domain context is pre-loaded on the edge to minimize GC pressure and bypass repetitive Jackson overhead
-            executePlugin(plugin, event);
-            return new ExecutionResult(event.messageId(), true, null);
-        } catch (Exception e) {
-            log.error("Error executing business logic for inbox event: {}", event.messageId(), e);
-            inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.EVENT_PROCESSING_FAILED);
-            return new ExecutionResult(event.messageId(), false, e.getMessage());
-        }
     }
 
     /**

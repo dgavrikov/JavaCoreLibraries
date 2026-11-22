@@ -40,11 +40,12 @@ public class InboxRepositoryDefault implements InboxRepository {
     /**
      * High-speed raw insertion statement enforcing immediate storage-level idempotent deduplication.
      * Bypasses the traditional 'NEW' phase by committing directly as 'PROCESSING' to maintain Zero-DB-Read limits.
+     * Bypasses the traditional 'NEW' phase by committing directly as 'PROCESSING' to maintain Zero-DB-Read limits.
      */
     @Language("SQL")
     private static final String SQL_INSERT = """
-            INSERT INTO inbox_events (message_id, event_type, payload, headers, status)
-                VALUES (:messageId, :eventType, :payload::jsonb, :headers::jsonb, 'PROCESSING')
+            INSERT INTO inbox_events (message_id, event_type, payload, headers, status, trace_info)
+                VALUES (:messageId, :eventType, :payload::jsonb, :headers::jsonb, 'PROCESSING', :trace_info)
                 ON CONFLICT (message_id) DO NOTHING;
             """;
 
@@ -66,7 +67,7 @@ public class InboxRepositoryDefault implements InboxRepository {
                 FOR UPDATE SKIP LOCKED
                 LIMIT :batchSize
             )
-            RETURNING message_id, event_type, payload, headers;
+            RETURNING message_id, event_type, payload, headers, trace_info;
             """;
 
     /**
@@ -87,7 +88,7 @@ public class InboxRepositoryDefault implements InboxRepository {
                 FOR UPDATE SKIP LOCKED
                 LIMIT :batchSize
             )
-            RETURNING message_id, event_type, payload, headers;
+            RETURNING message_id, event_type, payload, headers, trace_info;
             """;
 
 
@@ -154,7 +155,8 @@ public class InboxRepositoryDefault implements InboxRepository {
                     .addValue("messageId", event.messageId())
                     .addValue("eventType", event.eventType().asString())
                     .addValue("payload", event.payload())
-                    .addValue("headers", jsonHeaders);
+                    .addValue("headers", jsonHeaders)
+                    .addValue("trace_info", event.traceInfo());
 
             int affected = jdbcTemplate.update(SQL_INSERT, params);
             return affected > 0;
@@ -245,7 +247,8 @@ public class InboxRepositoryDefault implements InboxRepository {
                     .eventType(eventType)
                     .payload(rs.getString("payload")) // Маппим в rawPayload
                     .domainContext(null) // На этапе вычитки из БД контекста еще нет, его восстановит MaintenanceWorker
-                    .headers(objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF))
+                    .headers(rawHeaders != null ? objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF) : Map.of())
+                    .traceInfo(rs.getString("trace_info"))
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error de-serializing headers for InboxEvent", e);

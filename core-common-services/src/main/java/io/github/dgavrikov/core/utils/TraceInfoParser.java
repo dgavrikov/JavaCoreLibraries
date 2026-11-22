@@ -65,4 +65,28 @@ public class TraceInfoParser {
 
         return "00-" + traceId + "-" + spanId + "-01";
     }
+
+    /**
+     * Performs an O(1), zero-allocation structural validation check on the serialized tracing string.
+     *
+     * @param traceInfo the raw internal tracing string to validate, may be {@code null} or empty.
+     * @return {@code true} if the string contains non-empty {@code traceId} and {@code spanId} segments;
+     *         {@code false} otherwise.
+     */
+    public static boolean isValid(@Nullable String traceInfo) {
+        if (traceInfo == null || traceInfo.isEmpty()) {
+            return false;
+        }
+
+        int firstColon = traceInfo.indexOf(SPLIT_CHARACTER);
+        if (firstColon <= 0) {
+            return false;
+        }
+
+        int secondColon = traceInfo.indexOf(SPLIT_CHARACTER, firstColon + 1);
+        int spanEnd = (secondColon > 0) ? secondColon : traceInfo.length();
+
+        return spanEnd - (firstColon + 1) > 0;
+    }
+
 }
