@@ -76,4 +76,14 @@ public interface OutboxPayloadPlugin<T> {
     default String getRateLimitGroupId() {
         return getSupportedType().asString();
     }
+
+    /**
+     * Defines the processing priority lane for events produced by this plugin.
+     * Assigned at the plugin level to preserve strict FIFO ordering per entity keyId.
+     *
+     * @return the target {@link OutboxPriority}; defaults to {@link OutboxPriority#MEDIUM}
+     */
+    default OutboxPriority getPriority() {
+        return OutboxPriority.defaultPriority();
+    }
 }
