@@ -5,10 +5,22 @@ io:
         outbox:
           in-memory-queue:
             capacity: ${OUTBOX_IN_MEMORY_QUEUE_CAPACITY:10000}
-          batch-publisher:
-            initial-delay-ms: ${OUTBOX_BATCH_PUBLISHER_INITIAL_DELAY_MS:500}
-            scan-memory-queue-interval-delay-ms: ${OUTBOX_BATCH_PUBLISHER_SCAN_INTERVAL_MS:25}
-            batch-size: ${OUTBOX_BATCH_PUBLISHER_BATCH_SIZE:50}
+          publisher-props:
+            high-lane:
+              queue-capacity: ${OUTBOX_PUBLISHER_HIGH_QUEUE_CAPACITY:5000}
+              initial-delay-ms: ${OUTBOX_PUBLISHER_HIGH_INITIAL_DELAY_MS:1000}
+              scan-interval-delay-ms: ${OUTBOX_PUBLISHER_HIGH_SCAN_INTERVAL_MS:25}
+              batch-size: ${OUTBOX_PUBLISHER_HIGH_BATCH_SIZE:100}
+            medium-lane:
+              queue-capacity: ${OUTBOX_PUBLISHER_MEDIUM_QUEUE_CAPACITY:10000}
+              initial-delay-ms: ${OUTBOX_PUBLISHER_MEDIUM_INITIAL_DELAY_MS:2000}
+              scan-interval-delay-ms: ${OUTBOX_PUBLISHER_MEDIUM_SCAN_INTERVAL_MS:250}
+              batch-size: ${OUTBOX_PUBLISHER_MEDIUM_BATCH_SIZE:100}
+            low-lane:
+              queue-capacity: ${OUTBOX_PUBLISHER_LOW_QUEUE_CAPACITY:5000}
+              initial-delay-ms: ${OUTBOX_PUBLISHER_LOW_INITIAL_DELAY_MS:3000}
+              scan-interval-delay-ms: ${OUTBOX_PUBLISHER_LOW_SCAN_INTERVAL_MS:1000}
+              batch-size: ${OUTBOX_PUBLISHER_LOW_BATCH_SIZE:100}
           recovery-props:
             initial-delay-ms: ${OUTBOX_RECOVERY_INITIAL_DELAY_MS:5000}
             recovery-interval-delay-ms: ${OUTBOX_RECOVERY_INTERVAL_DELAY_MS:60000}

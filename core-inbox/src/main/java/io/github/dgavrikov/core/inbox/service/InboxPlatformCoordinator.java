@@ -6,8 +6,12 @@ import io.github.dgavrikov.core.inbox.metric.InboxMetricServices;
 import io.github.dgavrikov.core.inbox.model.InboxEvent;
 import io.github.dgavrikov.core.inbox.model.InboxPayloadPlugin;
 import io.github.dgavrikov.core.inbox.repository.InboxRepository;
+import io.github.dgavrikov.core.service.tracing.TraceMicrometer;
+import io.github.dgavrikov.core.utils.TraceInfoParser;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.collections4.CollectionUtils;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
@@ -44,6 +48,8 @@ public class InboxPlatformCoordinator {
 
     private final InboxMetricService inboxMetricService;
 
+    private final TraceMicrometer traceMicrometer;
+
     /**
      * Initializes the entry point coordinator facade instance and automatically constructs the
      * isolated internal extension plugin taxonomy dictionary map.
@@ -52,7 +58,8 @@ public class InboxPlatformCoordinator {
             BlockingQueue<InboxEvent<?>> inboxMemoryQueue,
             Collection<InboxPayloadPlugin<?>> inboxPayloadPlugins,
             InboxRepository inboxRepository,
-            InboxMetricService inboxMetricService
+            InboxMetricService inboxMetricService,
+            TraceMicrometer traceMicrometer
     ) {
         this.inboxMemoryQueue = inboxMemoryQueue;
         this.inboxRepository = inboxRepository;
@@ -65,6 +72,7 @@ public class InboxPlatformCoordinator {
                         plugin -> plugin,
                         (existing, replacement) -> existing
                 ));
+        this.traceMicrometer = traceMicrometer;
     }
 
     /**
@@ -80,55 +88,70 @@ public class InboxPlatformCoordinator {
      * false if the message is caught as a duplicate key pattern or discarded as an un-parseable poison pill threat.
      */
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public boolean coordinate(String messageId, String eventTypeName, String rawPayload, Map<String, String> headers) {
-        // 1. Resolve the matching extension handler component out of the localized registry map
-        InboxPayloadPlugin<?> plugin = pluginRegistry.get(eventTypeName);
-        if (plugin == null) {
-            log.error("No registered core-inbox plugin found for event type: [{}]. Dropping message.", eventTypeName);
-            inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.PLUGIN_NOT_REGISTRY);
-            return false;
+    public boolean coordinate(@NotNull String messageId,
+                              @NotNull String eventTypeName,
+                              @NotNull String rawPayload,
+                              @Nullable Map<String, String> headers,
+                              @Nullable String traceInfo) {
+        var realTraceInfo = TraceInfoParser.isValid(traceInfo)
+                ? traceInfo
+                : traceMicrometer.getCurrentTraceInfo();
+
+        try (var traceScope = traceMicrometer.openScope("inbox.coordinate", realTraceInfo)) {
+            traceScope.observation()
+                    .lowCardinalityKeyValue("inbox.event.type", eventTypeName)
+                    .highCardinalityKeyValue("inbox.message.id", messageId);
+
+            // 1. Resolve the matching extension handler component out of the localized registry map
+            InboxPayloadPlugin<?> plugin = pluginRegistry.get(eventTypeName);
+            if (plugin == null) {
+                log.error("No registered core-inbox plugin found for event type: [{}]. Dropping message.", eventTypeName);
+                inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.PLUGIN_NOT_REGISTRY);
+                return false;
+            }
+
+            // 2. Perform early boundary validation to trap and isolate corrupt payload strings before touching the database
+            Optional<?> domainContextOpt = plugin.validate(rawPayload);
+            if (domainContextOpt.isEmpty()) {
+                log.error("Poison pill detected for messageId: [{}], type: [{}]. Message dropped before DB persist.",
+                        messageId, eventTypeName);
+                inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.PAYLOAD_VALIDATION_ERROR);
+                return false;
+            }
+
+            // 3. Assemble the immutable type-safe container record carrying the pre-warmed domain object
+            InboxEvent<?> inboxEvent = InboxEvent.builder()
+                    .messageId(messageId)
+                    .eventType(plugin.getSupportedType())
+                    .payload(rawPayload)
+                    .domainContext(domainContextOpt.get()) // POJO готов для in-memory буфера
+                    .headers(headers != null ? headers : Map.of())
+                    .traceInfo(traceScope.traceInfo())
+                    .build();
+
+            // 4. Force atomic persistence into the storage engine utilizing native constraints as the primary deduplication mechanism
+            boolean isInserted = inboxRepository.save(inboxEvent);
+            if (!isInserted) {
+                log.debug("Duplicate message detected and skipped at DB primary-key layer: {}", messageId);
+                inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.DUPLICATE_MESSAGE_DB_DATABASE);
+                return false;
+            }
+
+            // 5. Synchronize memory state transformations strictly against current active Spring TX transaction boundaries
+            if (TransactionSynchronizationManager.isSynchronizationActive()) {
+                TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                    @Override
+                    public void afterCommit() {
+                        offerToMemoryQueue(inboxEvent);
+                    }
+                });
+            } else {
+                // Safe fallback path for auto-commit non-transactional transport endpoints
+                offerToMemoryQueue(inboxEvent);
+            }
+
+            return true;
         }
-
-        // 2. Perform early boundary validation to trap and isolate corrupt payload strings before touching the database
-        Optional<?> domainContextOpt = plugin.validate(rawPayload);
-        if (domainContextOpt.isEmpty()) {
-            log.error("Poison pill detected for messageId: [{}], type: [{}]. Message dropped before DB persist.",
-                    messageId, eventTypeName);
-            inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.PAYLOAD_VALIDATION_ERROR);
-            return false;
-        }
-
-        // 3. Assemble the immutable type-safe container record carrying the pre-warmed domain object
-        InboxEvent<?> inboxEvent = InboxEvent.builder()
-                .messageId(messageId)
-                .eventType(plugin.getSupportedType())
-                .payload(rawPayload)
-                .domainContext(domainContextOpt.get()) // POJO готов для in-memory буфера
-                .headers(headers != null ? headers : Map.of())
-                .build();
-
-        // 4. Force atomic persistence into the storage engine utilizing native constraints as the primary deduplication mechanism
-        boolean isInserted = inboxRepository.save(inboxEvent);
-        if (!isInserted) {
-            log.debug("Duplicate message detected and skipped at DB primary-key layer: {}", messageId);
-            inboxMetricService.increment(METRIC_SERVICE, InboxMetricCounters.DUPLICATE_MESSAGE_DB_DATABASE);
-            return false;
-        }
-
-        // 5. Synchronize memory state transformations strictly against current active Spring TX transaction boundaries
-        if (TransactionSynchronizationManager.isSynchronizationActive()) {
-            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
-                @Override
-                public void afterCommit() {
-                    offerToMemoryQueue(inboxEvent);
-                }
-            });
-        } else {
-            // Safe fallback path for auto-commit non-transactional transport endpoints
-            offerToMemoryQueue(inboxEvent);
-        }
-
-        return true;
     }
 
     /**

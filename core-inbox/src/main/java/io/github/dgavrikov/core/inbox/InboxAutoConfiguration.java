@@ -12,6 +12,7 @@ import io.github.dgavrikov.core.inbox.repository.InboxRepositoryDefault;
 import io.github.dgavrikov.core.inbox.service.InboxBatchProcessor;
 import io.github.dgavrikov.core.inbox.service.InboxMaintenanceWorker;
 import io.github.dgavrikov.core.inbox.service.InboxPlatformCoordinator;
+import io.github.dgavrikov.core.service.tracing.TraceMicrometer;
 import io.micrometer.core.instrument.Meter;
 import io.micrometer.core.instrument.MeterRegistry;
 import lombok.RequiredArgsConstructor;
@@ -81,7 +82,8 @@ public class InboxAutoConfiguration {
             Collection<InboxPayloadPlugin<?>> plugins,
             InboxProperties properties,
             InboxRepository repository,
-            InboxMetricService inboxMetricService
+            InboxMetricService inboxMetricService,
+            TraceMicrometer traceMicrometer
     ) {
         return new InboxBatchProcessor(
                 inboxWorkerScheduler,
@@ -89,7 +91,8 @@ public class InboxAutoConfiguration {
                 plugins,
                 properties,
                 repository,
-                inboxMetricService);
+                inboxMetricService,
+                traceMicrometer);
     }
 
     @Bean
@@ -115,12 +118,14 @@ public class InboxAutoConfiguration {
             BlockingQueue<InboxEvent<?>> inboxMemoryQueue,
             Collection<InboxPayloadPlugin<?>> plugins,
             InboxRepository repository,
-            InboxMetricService inboxMetricService
+            InboxMetricService inboxMetricService,
+            TraceMicrometer traceMicrometer
     ) {
         return new InboxPlatformCoordinator(
                 inboxMemoryQueue,
                 plugins,
                 repository,
-                inboxMetricService);
+                inboxMetricService,
+                traceMicrometer);
     }
 }

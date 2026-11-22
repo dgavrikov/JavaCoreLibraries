@@ -5,6 +5,7 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.github.dgavrikov.core.outbox.model.OutboxEvent;
 import io.github.dgavrikov.core.outbox.model.OutboxEventType;
+import io.github.dgavrikov.core.outbox.model.OutboxPriority;
 import io.github.dgavrikov.core.outbox.model.OutboxStatus;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,8 +32,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
     @Language("SQL")
     private static final String SQL_INSERT = """
-            INSERT INTO outbox_events(event_type, key_id, payload, headers, status, created_at, updated_at)
-            VALUES (:type, :key_id, :payload::jsonb, :headers::jsonb, :status, NOW(), NOW())
+            INSERT INTO outbox_events(event_type, priority, key_id, payload, headers, status, trace_info, created_at, updated_at)
+            VALUES (:type, :priority, :key_id, :payload::jsonb, :headers::jsonb, :status, :trace_info,  NOW(), NOW())
             """;
 
     @Language("SQL")
@@ -51,7 +52,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                         FROM outbox_events
                         WHERE status = 'NEW'
                           AND updated_at < :timeBoundary
-                        ORDER BY id ASC
+                        ORDER BY priority DESC, updated_at ASC, id ASC
                         LIMIT :batchSize
                         FOR UPDATE SKIP LOCKED
                     ),
@@ -60,9 +61,9 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                         SET updated_at = NOW()
                         FROM targets t
                         WHERE oe.id = t.id
-                        RETURNING oe.id, oe.event_type, oe.key_id, oe.payload, oe.headers
+                        RETURNING oe.id, oe.event_type, oe.priority, oe.key_id, oe.payload, oe.headers, oe.trace_info
                     )
-                    SELECT id, event_type, key_id, payload, headers FROM updated
+                    SELECT id, event_type, priority, key_id, payload, headers, trace_info FROM updated
             """;
 
     @Language("SQL")
@@ -100,17 +101,26 @@ public class OutboxRepositoryDefault implements OutboxRepository {
     }
 
     @Override
-    public OutboxEvent save(OutboxEventType eventType, String keyId, String payload, Map<String, String> headers, OutboxStatus outboxStatus) {
+    public OutboxEvent save(OutboxEventType eventType,
+                            OutboxPriority priority,
+                            String keyId,
+                            String payload,
+                            Map<String, String> headers,
+                            OutboxStatus outboxStatus,
+                            String traceInfo) {
 
         try {
             String jsonHeaders = objectMapper.writeValueAsString(headers);
+            var safePriority = priority != null ? priority : OutboxPriority.defaultPriority();
 
             var params = new MapSqlParameterSource()
                     .addValue("type", eventType.name())
+                    .addValue("priority", safePriority.getWeight())
                     .addValue("key_id", keyId)
                     .addValue("payload", payload)
                     .addValue("headers", jsonHeaders)
-                    .addValue("status", outboxStatus.name());
+                    .addValue("status", outboxStatus.name())
+                    .addValue("trace_info", traceInfo);
 
             var keyHolder = new GeneratedKeyHolder();
             namedParameterJdbcTemplate.update(SQL_INSERT, params, keyHolder, new String[]{"id"});
@@ -118,10 +128,12 @@ public class OutboxRepositoryDefault implements OutboxRepository {
 
             return OutboxEvent.builder()
                     .id(outboxEventId)
+                    .priority(safePriority)
                     .eventType(eventType)
                     .keyId(keyId)
                     .payload(payload)
                     .headers(headers != null ? headers : Map.of())
+                    .traceInfo(traceInfo)
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error serializing headers for OutboxEvent",e);
@@ -163,16 +175,18 @@ public class OutboxRepositoryDefault implements OutboxRepository {
     private OutboxEvent mapRowToEvent(ResultSet rs, int rowNum) throws SQLException {
         String typeStr = rs.getString("event_type");
         OutboxEventType eventType = () -> typeStr;
-
+        OutboxPriority priority = OutboxPriority.fromWeight(rs.getInt("priority"));
         String rawHeaders = rs.getString("headers");
 
         try {
             return OutboxEvent.builder()
                     .id(rs.getLong("id"))
                     .eventType(eventType)
+                    .priority(priority)
                     .keyId(rs.getString("key_id"))
                     .headers(objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF))
                     .payload(rs.getString("payload"))
+                    .traceInfo(rs.getString("trace_info"))
                     .build();
         } catch (JsonProcessingException e) {
             throw new RuntimeException("Error de-serializing headers for OutboxEvent", e);

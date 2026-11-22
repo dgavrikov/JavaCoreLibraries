@@ -17,6 +17,9 @@ public record OutboxEvent(
         /**Metadata descriptor type determining which plugin routes this event. */
         OutboxEventType eventType,
 
+        /** Execution priority level determining the target memory lane and recovery ordering. */
+        OutboxPriority priority,
+
         /**
          * The business partition key identifier (e.g., Kafka Record Key / REST routing ID).
          * Replaces the legacy aggregateId to detach outbox logic from specific entity lifecycles.
@@ -30,7 +33,12 @@ public record OutboxEvent(
          * A thread-safe, immutable flat map of transport metadata headers
          * used for distributed tracing (e.g., W3C traceparent, tenantId).
          */
-        Map<String, String> headers
+        Map<String, String> headers,
 
+        /**
+         * Serialized distributed tracing context (e.g., W3C {@code traceparent}/{@code tracestate} or B3)
+         * captured at event creation to link asynchronous outbox relay execution with the origin transaction span.
+         */
+        String traceInfo
 ) {
 }
