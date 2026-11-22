@@ -3,7 +3,7 @@ CREATE TABLE IF NOT EXISTS inbox_events
     message_id        VARCHAR(64)                                   NOT NULL,
     event_type        VARCHAR(64)                                   NOT NULL,
     payload           JSONB                                         NOT NULL,
-    headers           JSONB,
+    headers           JSONB                                         NULL,
     trace_info        VARCHAR(512)                                  NULL,
     status            VARCHAR(64)              DEFAULT 'PROCESSING' NOT NULL,
     retry_count       INT                      DEFAULT 0            NOT NULL,

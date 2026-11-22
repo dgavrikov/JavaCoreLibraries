@@ -110,7 +110,9 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                             String traceInfo) {
 
         try {
-            String jsonHeaders = objectMapper.writeValueAsString(headers);
+            String jsonHeaders = (headers == null || headers.isEmpty())
+                    ? null
+                    : objectMapper.writeValueAsString(headers);
             var safePriority = priority != null ? priority : OutboxPriority.defaultPriority();
 
             var params = new MapSqlParameterSource()
@@ -184,7 +186,9 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                     .eventType(eventType)
                     .priority(priority)
                     .keyId(rs.getString("key_id"))
-                    .headers(objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF))
+                    .headers(rawHeaders != null && !"null".equals(rawHeaders)
+                            ? objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF)
+                            : Map.of())
                     .payload(rs.getString("payload"))
                     .traceInfo(rs.getString("trace_info"))
                     .build();

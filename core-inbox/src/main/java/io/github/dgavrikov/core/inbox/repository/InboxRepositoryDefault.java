@@ -149,7 +149,9 @@ public class InboxRepositoryDefault implements InboxRepository {
     @Override
     public boolean save(InboxEvent<?> event) {
         try {
-            String jsonHeaders = objectMapper.writeValueAsString(event.headers());
+            String jsonHeaders = (event.headers() == null || event.headers().isEmpty())
+                    ? null
+                    : objectMapper.writeValueAsString(event.headers());
 
             SqlParameterSource params = new MapSqlParameterSource()
                     .addValue("messageId", event.messageId())
@@ -245,9 +247,11 @@ public class InboxRepositoryDefault implements InboxRepository {
             return InboxEvent.builder()
                     .messageId(rs.getString("message_id"))
                     .eventType(eventType)
-                    .payload(rs.getString("payload")) // Маппим в rawPayload
-                    .domainContext(null) // На этапе вычитки из БД контекста еще нет, его восстановит MaintenanceWorker
-                    .headers(rawHeaders != null ? objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF) : Map.of())
+                    .payload(rs.getString("payload"))
+                    .domainContext(null)
+                    .headers(rawHeaders != null && !"null".equals(rawHeaders)
+                            ? objectMapper.readValue(rawHeaders, HEADERS_TYPE_REF)
+                            : Map.of())
                     .traceInfo(rs.getString("trace_info"))
                     .build();
         } catch (JsonProcessingException e) {
