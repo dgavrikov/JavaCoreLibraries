@@ -109,8 +109,13 @@ public class OutboxBatchPublisher implements ApplicationListener<ApplicationRead
         List<Long> successIds = new ArrayList<>(events.size());
 
         for (var event : events) {
-            var traceName = "OutboxBatchPublisher"+ event.eventType().name();
+            var traceName = "outbox.event.publish";
             try (var traceScope = traceMicrometer.openScope(traceName, event.traceInfo())) {
+                traceScope.observation()
+                        .lowCardinalityKeyValue("outbox.event.type", event.eventType().name())
+                        .lowCardinalityKeyValue("outbox.priority", event.priority().name())
+                        .highCardinalityKeyValue("outbox.event.id", String.valueOf(event.id()))
+                        .highCardinalityKeyValue("messaging.message.key", event.keyId());
                 try {
                     var plugin = factoryRegistry.get(event.eventType().name());
                     if (plugin == null) {
