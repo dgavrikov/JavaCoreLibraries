@@ -17,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
@@ -45,7 +46,7 @@ public class InboxRepositoryDefault implements InboxRepository {
     @Language("SQL")
     private static final String SQL_INSERT = """
             INSERT INTO inbox_events (message_id, event_type, payload, headers, status, trace_info)
-                VALUES (:messageId, :eventType, :payload::jsonb, :headers::jsonb, 'PROCESSING', :trace_info)
+                VALUES (:messageId, :eventType, :payload, :headers, 'PROCESSING', :trace_info)
                 ON CONFLICT (message_id) DO NOTHING;
             """;
 
@@ -156,8 +157,8 @@ public class InboxRepositoryDefault implements InboxRepository {
             SqlParameterSource params = new MapSqlParameterSource()
                     .addValue("messageId", event.messageId())
                     .addValue("eventType", event.eventType().asString())
-                    .addValue("payload", event.payload())
-                    .addValue("headers", jsonHeaders)
+                    .addValue("payload", event.payload(), Types.OTHER)
+                    .addValue("headers", jsonHeaders, Types.OTHER)
                     .addValue("trace_info", event.traceInfo());
 
             int affected = jdbcTemplate.update(SQL_INSERT, params);

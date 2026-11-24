@@ -19,6 +19,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Types;
 import java.time.OffsetDateTime;
 import java.util.*;
 @Slf4j
@@ -33,7 +34,7 @@ public class OutboxRepositoryDefault implements OutboxRepository {
     @Language("SQL")
     private static final String SQL_INSERT = """
             INSERT INTO outbox_events(event_type, priority, key_id, payload, headers, status, trace_info, created_at, updated_at)
-            VALUES (:type, :priority, :key_id, :payload::jsonb, :headers::jsonb, :status, :trace_info,  NOW(), NOW())
+            VALUES (:type, :priority, :key_id, :payload, :headers, :status, :trace_info,  NOW(), NOW())
             """;
 
     @Language("SQL")
@@ -119,8 +120,8 @@ public class OutboxRepositoryDefault implements OutboxRepository {
                     .addValue("type", eventType.name())
                     .addValue("priority", safePriority.getWeight())
                     .addValue("key_id", keyId)
-                    .addValue("payload", payload)
-                    .addValue("headers", jsonHeaders)
+                    .addValue("payload", payload, Types.OTHER)
+                    .addValue("headers", jsonHeaders, Types.OTHER)
                     .addValue("status", outboxStatus.name())
                     .addValue("trace_info", traceInfo);
 

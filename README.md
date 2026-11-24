@@ -38,7 +38,6 @@ A monorepo containing a set of reusable corporate starter libraries and core uti
 Provides foundational functionality for logging, metrics monitoring, distributed tracing, and data masking, along with common utility classes.
 
 ### Key Features
-* Pre-configured JSON `ObjectMapper` bean.
 * Optimized collection manipulation utilities.
 * Serialization and deserialization utilities with built-in compression.
 * Performance-optimized string manipulation utilities.

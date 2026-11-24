@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.*;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
+@Deprecated(forRemoval = true)
 public class JsonConfigurationBuilder {
     private final JavaTimeModule javaTimeModule = new JavaTimeModule();
 
