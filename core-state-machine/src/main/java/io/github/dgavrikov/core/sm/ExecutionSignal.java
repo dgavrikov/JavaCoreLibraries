@@ -30,14 +30,17 @@ public enum ExecutionSignal {
     DEFER,
 
     /**
-     * A transient failure occurred (e.g., network timeout). Signals a retry attempt.
-     * Increments the retry counter, breaks the loop, and awaits the next scheduler tick.
+     * Records a retry attempt (e.g., during polling or scheduled re-execution).
+     * Increments the retry counter in the DB without changing the current state,
+     * breaks the RTC loop, and clears memory.
+     * Note: Does not require a transition entry in the workflow step definition (any configured target state is ignored).
      */
     RETRY,
 
     /**
-     * Forces an immediate stop of the RTC loop execution.
-     * No state or data mutations are saved to the database.
+     * Terminates the current step and exits the RTC State Machine instance immediately.
+     * No state, counters, or data mutations are persisted to the database.
+     * Note: Does not require a transition entry in the workflow step definition (any configured target state is ignored).
      */
     STOP,
 
